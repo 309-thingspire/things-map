@@ -25,6 +25,8 @@ model User {
   reviews      Review[]
   requests     StoreRequest[]
   crawlJobs    CrawlJob[]
+  logins       UserLogin[]
+  storeViews   StoreView[]
 
   @@map("users")
 }
@@ -80,6 +82,7 @@ model Store {
   reviews       Review[]
   internalRating InternalRating?
   requests      StoreRequest[]
+  views         StoreView[]
 
   @@map("stores")
 }
@@ -255,4 +258,34 @@ enum JobStatus {
   RUNNING
   DONE
   FAILED
+}
+
+// ────────────────────────────────────────
+// 로그인 이력 (DAU/MAU 추적)
+// ────────────────────────────────────────
+model UserLogin {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("user_logins")
+}
+
+// ────────────────────────────────────────
+// 매장 상세 열람 이력 (인기 매장 추적)
+// ────────────────────────────────────────
+model StoreView {
+  id        String   @id @default(cuid())
+  storeId   String   @map("store_id")
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([storeId])
+  @@index([createdAt])
+  @@map("store_views")
 }

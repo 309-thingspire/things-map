@@ -3,9 +3,16 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calcOfficeDistance } from '@/lib/office'
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+
+    // 로그인 유저의 매장 조회 이력 기록
+    const session = await getSession()
+    if (session) {
+      prisma.storeView.create({ data: { storeId: id, userId: session.userId } }).catch(() => {})
+    }
+
     const store = await prisma.store.findUnique({
       where: { id },
       include: {

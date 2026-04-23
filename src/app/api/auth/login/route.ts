@@ -22,10 +22,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '비활성화된 계정입니다. 관리자에게 문의하세요.' }, { status: 403 })
     }
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    })
+    await Promise.all([
+      prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } }),
+      prisma.userLogin.create({ data: { userId: user.id } }),
+    ])
 
     const token = await signToken({ userId: user.id, role: user.role })
 
