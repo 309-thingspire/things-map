@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Trash2, ScanSearch, Loader2, CheckCircle, XCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
+import { Trash2, ScanSearch, Loader2, CheckCircle, XCircle, ChevronUp, ChevronDown, ChevronsUpDown, ExternalLink } from 'lucide-react'
+import { toast } from '@/components/ui/Toaster'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -132,8 +133,11 @@ export default function AdminStoresPage() {
     })
 
     if (res.ok) {
+      toast(editStore ? '매장이 수정되었습니다.' : '매장이 등록되었습니다.')
       setDialogOpen(false)
       fetchStores()
+    } else {
+      toast('저장에 실패했습니다.', 'error')
     }
   }
 
@@ -146,13 +150,14 @@ export default function AdminStoresPage() {
       if (res.ok) {
         const { data } = await res.json()
         setCrawlResult({ success: data.success, failed: data.failed })
+        toast(`크롤링 완료 — 성공 ${data.success}개${data.failed ? `, 실패 ${data.failed}개` : ''}`, data.failed ? 'error' : 'success')
         fetchStores()
       } else {
         const json = await res.json()
-        alert(json.error ?? '크롤링 실패 (Playwright가 설치된 로컬 환경에서만 동작합니다)')
+        toast(json.error ?? '크롤링 실패', 'error')
       }
     } catch {
-      alert('크롤링 실패 (Playwright가 설치된 로컬 환경에서만 동작합니다)')
+      toast('크롤링 실패 — 네트워크 오류', 'error')
     } finally {
       setCrawling(false)
     }
@@ -160,7 +165,9 @@ export default function AdminStoresPage() {
 
   async function handleDelete(id: string) {
     if (!confirm('삭제하시겠습니까?')) return
-    await fetch(`/api/stores/${id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/stores/${id}`, { method: 'DELETE' })
+    if (res.ok) toast('매장이 삭제되었습니다.', 'error')
+    else toast('삭제에 실패했습니다.', 'error')
     fetchStores()
   }
 
@@ -188,10 +195,11 @@ export default function AdminStoresPage() {
       if (res.ok) {
         const { data } = await res.json()
         setImportResult(data)
+        toast(`CSV 가져오기 완료 — ${data.success.length}개 성공`)
         fetchStores()
       } else {
         const { error } = await res.json()
-        alert(error)
+        toast(error ?? 'CSV 가져오기 실패', 'error')
       }
     } finally {
       setCsvLoading(false)
@@ -280,13 +288,31 @@ export default function AdminStoresPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded"
-                      onClick={(e) => { e.stopPropagation(); handleDelete(store.id) }}
-                      title="삭제"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      {store.naverUrl ? (
+                        <a
+                          href={store.naverUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 text-gray-400 hover:text-blue-500 transition-colors rounded"
+                          title="네이버 지도에서 보기"
+                        >
+                          <ExternalLink size={15} />
+                        </a>
+                      ) : (
+                        <span className="p-1.5 text-gray-200 cursor-not-allowed" title="URL 없음">
+                          <ExternalLink size={15} />
+                        </span>
+                      )}
+                      <button
+                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(store.id) }}
+                        title="삭제"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

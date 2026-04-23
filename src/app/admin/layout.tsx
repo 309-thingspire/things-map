@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Toaster from '@/components/ui/Toaster'
 import type { ReactNode } from 'react'
 
 const navItems = [
@@ -38,6 +39,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
       {/* 메인 */}
       <main className="flex-1 overflow-y-auto p-6">{children}</main>
+      <Toaster />
     </div>
   )
 }

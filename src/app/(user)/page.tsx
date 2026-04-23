@@ -150,7 +150,7 @@ export default function HomePage() {
           <div className="flex gap-2 px-4 pb-2 overflow-x-auto pointer-events-auto" style={{ scrollbarWidth: 'none' }}>
             <button
               onClick={() => setSelectedCategories([])}
-              className={`flex-shrink-0 text-xs px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm ${
+              className={`flex-shrink-0 text-sm px-4 py-2 rounded-full border transition-colors backdrop-blur-sm ${
                 selectedCategories.length === 0
                   ? 'bg-blue-500 text-white border-blue-500'
                   : 'bg-white/80 text-gray-600 border-gray-200'
@@ -164,14 +164,14 @@ export default function HomePage() {
                 <button
                   key={cat.id}
                   onClick={() => toggleCategory(cat.id)}
-                  className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center gap-1.5 text-xs whitespace-nowrap ${
+                  className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center gap-1.5 text-sm whitespace-nowrap ${
                     active ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/80 text-gray-600 border-gray-200'
                   }`}
                 >
                   {cat.icon && (
                     <span
                       className="flex items-center"
-                      dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 14) }}
+                      dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 16) }}
                     />
                   )}
                   {cat.name}
@@ -181,7 +181,7 @@ export default function HomePage() {
             {/* 미분류 */}
             <button
               onClick={() => toggleCategory('__none__')}
-              className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm text-xs ${
+              className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm text-sm ${
                 selectedCategories.includes('__none__')
                   ? 'bg-blue-500 text-white border-blue-500'
                   : 'bg-white/80 text-gray-600 border-gray-200'
@@ -233,14 +233,14 @@ export default function HomePage() {
                   <button
                     key={cat.id}
                     onClick={() => toggleCategory(cat.id)}
-                    className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors flex items-center gap-1.5 text-xs whitespace-nowrap ${
+                    className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors flex items-center gap-1.5 text-sm whitespace-nowrap ${
                       active ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
                     {cat.icon && (
                       <span
                         className="flex items-center"
-                        dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 14) }}
+                        dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 16) }}
                       />
                     )}
                     {cat.name}
@@ -250,7 +250,7 @@ export default function HomePage() {
               {/* 미분류 */}
               <button
                 onClick={() => toggleCategory('__none__')}
-                className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors text-xs ${
+                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors text-sm ${
                   selectedCategories.includes('__none__')
                     ? 'bg-blue-500 text-white border-blue-500'
                     : 'text-gray-600 border-gray-200 hover:bg-gray-50'
