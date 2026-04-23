@@ -123,25 +123,19 @@ function NavContent() {
 
 function UserLayoutInner({ children }: { children: ReactNode }) {
   const pathname = usePathname()
-  const { viewMode } = useViewMode()
   const isMapPage = pathname === '/'
-  const isListMode = isMapPage && viewMode === 'list'
 
   if (isMapPage) {
     return (
-      <div className={isListMode ? 'flex flex-col h-screen bg-gray-50' : 'relative h-screen'}>
-        {/* Header — floats over map, or normal bar in list mode */}
-        <header className={isListMode
-          ? 'h-14 flex items-center justify-between px-4 z-20 shrink-0 bg-white border-b shadow-sm'
-          : 'absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 z-20'}>
+      <div className="relative h-screen">
+        <header className="absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 z-20">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/logo.avif" alt="띵스파이어" width={120} height={32} className="h-8 w-auto object-contain" />
             <Image src="/icons_map.png" alt="" width={32} height={32} className="h-8 w-auto object-contain" />
           </Link>
           <NavContent />
         </header>
-        {/* Content fills remaining space */}
-        <div className={isListMode ? 'flex-1 overflow-hidden' : 'absolute inset-0'}>
+        <div className="absolute inset-0">
           {children}
         </div>
       </div>
@@ -151,8 +145,9 @@ function UserLayoutInner({ children }: { children: ReactNode }) {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       <header className="h-14 flex items-center justify-between px-4 z-20 shrink-0 bg-white border-b shadow-sm">
-        <Link href="/">
+        <Link href="/" className="flex items-center gap-2">
           <Image src="/logo.avif" alt="띵스파이어" width={120} height={32} className="h-8 w-auto object-contain" />
+          <Image src="/icons_map.png" alt="" width={32} height={32} className="h-8 w-auto object-contain" />
         </Link>
         <NavContent />
       </header>
