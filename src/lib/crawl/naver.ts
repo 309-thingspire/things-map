@@ -49,14 +49,17 @@ export async function searchNaver(keyword: string, start = 1, display = 5): Prom
 
   return items.map((item) => {
     const { lat, lng } = katechToWgs84(parseInt(item.mapx), parseInt(item.mapy))
+    const name = item.title.replace(/<[^>]+>/g, '')
+    const address = item.roadAddress || item.address
+    const naverUrl = `https://map.naver.com/v5/search/${encodeURIComponent(`${name} ${address}`)}`
     return {
-      name: item.title.replace(/<[^>]+>/g, ''), // HTML 태그 제거
-      address: item.roadAddress || item.address,
+      name,
+      address,
       lat,
       lng,
       phone: item.telephone || null,
       category: item.category || null,
-      naverUrl: item.link || '',
+      naverUrl,
       rawData: item,
     }
   })
