@@ -122,26 +122,25 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
                 </div>
 
                 {/* 매장명 — naverUrl이 있으면 링크 */}
-                {store.naverUrl ? (
-                  <a
-                    href={store.naverUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 group"
-                  >
-                    <h2 className="text-xl font-bold text-gray-900 group-hover:text-[#38c68b] transition-colors">{store.name}</h2>
-                    <ExternalLink size={14} className="text-gray-400 group-hover:text-[#38c68b] transition-colors shrink-0 mt-1" />
-                  </a>
-                ) : (
-                  <h2 className="text-xl font-bold text-gray-900">{store.name}</h2>
-                )}
-
+                <h2 className="text-xl font-bold text-gray-900">{store.name}</h2>
                 <p className="text-sm text-gray-500 mt-1">{store.address}</p>
                 {store.walkingMinutes != null && (
                   <p className="text-sm text-[#38c68b] mt-1">🏢 회사로부터 {store.walkingMinutes}분</p>
                 )}
                 {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
                 {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
+
+                {store.naverUrl && (
+                  <a
+                    href={store.naverUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 mt-3 text-sm text-gray-500 hover:text-[#03C75A] transition-colors"
+                  >
+                    <ExternalLink size={13} />
+                    네이버 지도에서 보기
+                  </a>
+                )}
               </div>
 
               {/* 메뉴 */}
