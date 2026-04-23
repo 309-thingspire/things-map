@@ -86,20 +86,29 @@ export async function GET() {
 
   // 인기 매장 상세 정보
   const storeIds = topViewGroups.map((g) => g.storeId)
-  const storeDetails = await prisma.store.findMany({
-    where: { id: { in: storeIds } },
-    select: {
-      id: true, name: true,
-      category: { select: { name: true, color: true } },
-      internalRating: { select: { avgTotal: true, reviewCount: true } },
-      walkingMinutes: true,
-    },
-  })
+  const [storeDetails, chatViewGroups] = await Promise.all([
+    prisma.store.findMany({
+      where: { id: { in: storeIds } },
+      select: {
+        id: true, name: true,
+        category: { select: { name: true, color: true } },
+        internalRating: { select: { avgTotal: true, reviewCount: true } },
+        walkingMinutes: true,
+        favoriteCount: true,
+      },
+    }),
+    prisma.storeView.groupBy({
+      by: ['storeId'],
+      where: { storeId: { in: storeIds }, source: 'chat' },
+      _count: { storeId: true },
+    }),
+  ])
 
   // StoreView가 없는 경우 리뷰 기준 폴백 (리뷰 많은 순)
   const topStoresFromViews = topViewGroups.map((g) => ({
     ...storeDetails.find((s) => s.id === g.storeId)!,
     viewCount: g._count.storeId,
+    chatCount: chatViewGroups.find((c) => c.storeId === g.storeId)?._count.storeId ?? 0,
   })).filter(Boolean)
 
   let popularStores = topStoresFromViews
@@ -111,13 +120,14 @@ export async function GET() {
         category: { select: { name: true, color: true } },
         internalRating: { select: { avgTotal: true, reviewCount: true } },
         walkingMinutes: true,
+        favoriteCount: true,
       },
       orderBy: { internalRating: { reviewCount: 'desc' } },
       take: 10 - popularStores.length,
     })
     popularStores = [
       ...popularStores,
-      ...reviewBased.map((s) => ({ ...s, viewCount: 0 })),
+      ...reviewBased.map((s) => ({ ...s, viewCount: 0, chatCount: 0 })),
     ]
   }
 

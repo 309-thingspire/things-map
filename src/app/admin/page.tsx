@@ -12,6 +12,8 @@ interface PopularStore {
   internalRating: { avgTotal: number; reviewCount: number } | null
   walkingMinutes: number | null
   viewCount: number
+  chatCount: number
+  favoriteCount: number
 }
 interface UserStat {
   id: string; name: string; team: string
@@ -153,6 +155,8 @@ export default function AdminDashboard() {
               <th className="text-left px-4 py-2.5 font-medium">도보</th>
               <th className="text-left px-4 py-2.5 font-medium">평점</th>
               <th className="text-left px-4 py-2.5 font-medium">조회수</th>
+              <th className="text-left px-4 py-2.5 font-medium">띵봇</th>
+              <th className="text-left px-4 py-2.5 font-medium">즐겨찾기</th>
               <th className="text-left px-4 py-2.5 font-medium">리뷰수</th>
             </tr>
           </thead>
@@ -178,6 +182,8 @@ export default function AdminDashboard() {
                   {store.internalRating ? `★ ${store.internalRating.avgTotal.toFixed(1)}` : '-'}
                 </td>
                 <td className="px-4 py-3 text-gray-700 font-medium">{store.viewCount}</td>
+                <td className="px-4 py-3 text-purple-500 font-medium">{store.chatCount > 0 ? `🤖 ${store.chatCount}` : '-'}</td>
+                <td className="px-4 py-3 text-rose-500 font-medium">{store.favoriteCount > 0 ? `♥ ${store.favoriteCount}` : '-'}</td>
                 <td className="px-4 py-3 text-gray-500">{store.internalRating?.reviewCount ?? 0}</td>
               </tr>
             ))}

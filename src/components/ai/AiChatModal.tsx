@@ -22,6 +22,7 @@ const STORE_TAG_RE = /\[STORE:([^\]]+)\]/g
 
 function ChatStoreCard({ store, onClose }: { store: StoreListItem; onClose: () => void }) {
   function handleClick() {
+    fetch(`/api/stores/${store.id}/view`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: 'chat' }) }).catch(() => {})
     window.dispatchEvent(new CustomEvent('ddingbot:selectStore', { detail: { storeId: store.id } }))
     onClose()
   }

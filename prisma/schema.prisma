@@ -318,6 +318,7 @@ model StoreView {
   store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
   userId    String   @map("user_id")
   user      User     @relation(fields: [userId], references: [id])
+  source    String   @default("direct") @map("source") // "direct" | "chat"
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([storeId])
