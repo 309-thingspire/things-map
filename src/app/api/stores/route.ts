@@ -20,10 +20,18 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { status: 'ACTIVE' }
 
-    // 카테고리 다중 선택
+    // 카테고리 다중 선택 (__none__ = 미분류)
     if (categoriesParam) {
       const ids = categoriesParam.split(',').filter(Boolean)
-      if (ids.length > 0) where.categoryId = { in: ids }
+      const hasNone = ids.includes('__none__')
+      const realIds = ids.filter((id) => id !== '__none__')
+      if (hasNone && realIds.length > 0) {
+        where.OR = [{ categoryId: { in: realIds } }, { categoryId: null }]
+      } else if (hasNone) {
+        where.categoryId = null
+      } else if (realIds.length > 0) {
+        where.categoryId = { in: realIds }
+      }
     } else if (category) {
       where.categoryId = category
     }

@@ -127,4 +127,10 @@ export function getMarkerSvgHtml(iconName: string, color: string, size = 36): st
   </div>`
 }
 
+export function getIconSvgHtml(iconName: string, color: string, size = 18): string {
+  const nodes = ICON_NODES[iconName]
+  if (!nodes) return ''
+  return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">${buildSvgContent(nodes)}</svg>`
+}
+
 export const AVAILABLE_ICONS = Object.keys(ICON_NODES)

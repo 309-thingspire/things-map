@@ -1,32 +1,45 @@
 'use client'
 
 import { useState } from 'react'
-import { X } from 'lucide-react'
+import { X, MapPin } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import StoreSearchInput, { type StoreSuggestion } from './StoreSearchInput'
 
 interface Props {
   onClose: () => void
 }
 
 export default function RequestModal({ onClose }: Props) {
-  const [form, setForm] = useState({ name: '', address: '', phone: '', category: '', themeTags: '', menus: '' })
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<StoreSuggestion | null>(null)
+  const [memo, setMemo] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState('')
 
+  function handleSelect(r: StoreSuggestion) {
+    setSelected(r)
+    setError('')
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!selected) { setError('매장을 검색 후 선택해주세요.'); return }
     setSubmitting(true)
     setError('')
 
     const payload = {
-      name: form.name,
-      address: form.address || null,
-      phone: form.phone || null,
-      categoryName: form.category || null,
-      themeTags: form.themeTags.split(',').map(t => t.trim()).filter(Boolean),
-      menus: form.menus ? form.menus.split(',').map(m => ({ name: m.trim() })) : [],
+      name: selected.name,
+      address: selected.address,
+      phone: selected.phone ?? null,
+      categoryName: selected.category ?? null,
+      themeTags: [],
+      menus: [],
+      memo: memo || null,
+      lat: selected.lat,
+      lng: selected.lng,
+      naverUrl: selected.naverUrl,
     }
 
     const res = await fetch('/api/requests', {
@@ -46,10 +59,8 @@ export default function RequestModal({ onClose }: Props) {
 
   return (
     <>
-      {/* Backdrop */}
       <div className="fixed inset-0 z-[60] bg-black/50" onClick={onClose} />
 
-      {/* Modal */}
       <div className="fixed inset-0 z-[61] flex items-center justify-center p-4 pointer-events-none">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl pointer-events-auto flex flex-col max-h-[90vh]">
           {/* Header */}
@@ -73,37 +84,48 @@ export default function RequestModal({ onClose }: Props) {
                 <Button onClick={onClose} className="w-full">닫기</Button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-3">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">매장명 <span className="text-red-500">*</span></label>
-                  <Input placeholder="예: 성수동 XX카페" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    매장 검색 <span className="text-red-500">*</span>
+                  </label>
+                  <StoreSearchInput
+                    value={query}
+                    onChange={setQuery}
+                    onSelect={handleSelect}
+                    placeholder="매장명으로 검색 (예: 스타벅스)"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">회사 기준 가까운 지점 순으로 표시됩니다.</p>
                 </div>
+
+                {/* 선택된 매장 미리보기 */}
+                {selected && (
+                  <div className="bg-gray-50 rounded-xl p-3 flex items-start gap-2.5">
+                    <MapPin size={15} className="text-blue-500 mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">{selected.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{selected.address}</p>
+                      <p className="text-xs text-blue-500 mt-0.5">도보 {selected.walkingMinutes}분</p>
+                    </div>
+                  </div>
+                )}
+
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">주소</label>
-                  <Input placeholder="예: 서울 성동구 성수동..." value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">전화번호</label>
-                  <Input placeholder="예: 02-000-0000" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">카테고리</label>
-                  <Input placeholder="예: 카페, 한식, 이탈리안..." value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">테마 태그 <span className="text-xs text-gray-400">(쉼표로 구분)</span></label>
-                  <Input placeholder="예: 데이트, 혼밥, 주차" value={form.themeTags} onChange={e => setForm({ ...form, themeTags: e.target.value })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">대표 메뉴 <span className="text-xs text-gray-400">(쉼표로 구분)</span></label>
-                  <Input placeholder="예: 아메리카노, 크로플" value={form.menus} onChange={e => setForm({ ...form, menus: e.target.value })} />
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    메모 <span className="text-xs text-gray-400">(선택)</span>
+                  </label>
+                  <Input
+                    placeholder="추천 이유, 메뉴 등 자유롭게"
+                    value={memo}
+                    onChange={(e) => setMemo(e.target.value)}
+                  />
                 </div>
 
                 {error && <p className="text-sm text-red-500">{error}</p>}
 
                 <div className="flex gap-3 pt-1">
                   <Button type="button" variant="outline" className="flex-1" onClick={onClose}>취소</Button>
-                  <Button type="submit" disabled={submitting} className="flex-1">
+                  <Button type="submit" disabled={submitting || !selected} className="flex-1">
                     {submitting ? '제출 중...' : '등록 요청'}
                   </Button>
                 </div>

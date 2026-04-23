@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Trash2, ScanSearch, Loader2, CheckCircle, XCircle } from 'lucide-react'
+import { Trash2, ScanSearch, Loader2, CheckCircle, XCircle, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import StoreSearchInput, { type StoreSuggestion } from '@/components/store/StoreSearchInput'
 import type { StoreDetail, Category } from '@/types'
 
 interface StoreRow extends StoreDetail {
@@ -22,12 +23,36 @@ export default function AdminStoresPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editStore, setEditStore] = useState<StoreRow | null>(null)
   const [form, setForm] = useState({ name: '', address: '', lat: '', lng: '', phone: '', categoryId: '', themeTags: '', status: 'ACTIVE', naverUrl: '' })
-  const [autofilling, setAutofilling] = useState(false)
   const [csvLoading, setCsvLoading] = useState(false)
   const [importResult, setImportResult] = useState<{ success: string[]; failed: string[] } | null>(null)
   const csvInputRef = useRef<HTMLInputElement>(null)
   const [crawling, setCrawling] = useState(false)
   const [crawlResult, setCrawlResult] = useState<{ success: number; failed: number } | null>(null)
+  type SortField = 'name' | 'category' | 'walkingMinutes' | 'rating' | 'status'
+  const [sortField, setSortField] = useState<SortField>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function toggleSort(field: SortField) {
+    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortField(field); setSortDir('asc') }
+  }
+
+  const sortedStores = [...stores].sort((a, b) => {
+    let cmp = 0
+    if (sortField === 'name') cmp = a.name.localeCompare(b.name, 'ko')
+    else if (sortField === 'category') cmp = (a.category?.name ?? '').localeCompare(b.category?.name ?? '', 'ko')
+    else if (sortField === 'walkingMinutes') cmp = (a.walkingMinutes ?? 9999) - (b.walkingMinutes ?? 9999)
+    else if (sortField === 'rating') cmp = (b.internalRating?.avgTotal ?? 0) - (a.internalRating?.avgTotal ?? 0)
+    else if (sortField === 'status') cmp = a.status.localeCompare(b.status)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) return <ChevronsUpDown size={13} className="inline ml-1 text-gray-400" />
+    return sortDir === 'asc'
+      ? <ChevronUp size={13} className="inline ml-1 text-blue-500" />
+      : <ChevronDown size={13} className="inline ml-1 text-blue-500" />
+  }
 
   async function fetchStores() {
     const res = await fetch('/api/stores?limit=200')
@@ -70,34 +95,18 @@ export default function AdminStoresPage() {
     setDialogOpen(true)
   }
 
-  async function handleAutofill() {
-    if (!form.name) return
-    setAutofilling(true)
-    try {
-      const res = await fetch('/api/stores/autofill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: form.name }),
-      })
-      if (res.ok) {
-        const { data } = await res.json()
-        const matched = categories.find((c) => c.name === data.category)
-        setForm((prev) => ({
-          ...prev,
-          name: data.name || prev.name,
-          address: data.address || prev.address,
-          lat: data.lat ? String(data.lat) : prev.lat,
-          lng: data.lng ? String(data.lng) : prev.lng,
-          phone: data.phone || prev.phone,
-          categoryId: matched?.id ?? prev.categoryId,
-          naverUrl: data.naverUrl || prev.naverUrl,
-        }))
-      } else {
-        alert('검색 결과가 없습니다.')
-      }
-    } finally {
-      setAutofilling(false)
-    }
+  function handleSuggestSelect(r: StoreSuggestion) {
+    const matched = categories.find((c) => c.name === r.category)
+    setForm((prev) => ({
+      ...prev,
+      name: r.name,
+      address: r.address,
+      lat: String(r.lat),
+      lng: String(r.lng),
+      phone: r.phone ?? prev.phone,
+      categoryId: matched?.id ?? prev.categoryId,
+      naverUrl: r.naverUrl,
+    }))
   }
 
   async function handleSave() {
@@ -238,17 +247,17 @@ export default function AdminStoresPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b">
               <tr>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">매장명</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">카테고리</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('name')}>매장명<SortIcon field="name" /></th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('category')}>카테고리<SortIcon field="category" /></th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">주소</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">도보</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">평점</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">상태</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('walkingMinutes')}>도보<SortIcon field="walkingMinutes" /></th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('rating')}>평점<SortIcon field="rating" /></th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 cursor-pointer select-none hover:text-gray-900" onClick={() => toggleSort('status')}>상태<SortIcon field="status" /></th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">관리</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {stores.map((store) => (
+              {sortedStores.map((store) => (
                 <tr
                   key={store.id}
                   className="hover:bg-gray-50 cursor-pointer"
@@ -292,22 +301,12 @@ export default function AdminStoresPage() {
             <DialogTitle>{editStore ? '매장 수정' : '매장 추가'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="flex gap-2">
-              <Input
-                placeholder="매장명"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className="flex-1"
-              />
-              <Button
-                variant="outline"
-                onClick={handleAutofill}
-                disabled={autofilling || !form.name}
-                className="shrink-0"
-              >
-                {autofilling ? '검색중...' : '자동 채우기'}
-              </Button>
-            </div>
+            <StoreSearchInput
+              value={form.name}
+              onChange={(v) => setForm({ ...form, name: v })}
+              onSelect={handleSuggestSelect}
+              placeholder="매장명 검색 후 선택하면 자동완성"
+            />
             <Input placeholder="주소" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             <div className="flex gap-2">
               <Input placeholder="위도 (lat)" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} />

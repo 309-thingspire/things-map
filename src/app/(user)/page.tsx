@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { LocateFixed } from 'lucide-react'
 import { useStores } from '@/hooks/useStores'
 import { useMap, DEFAULT_CENTER, DEFAULT_ZOOM } from '@/hooks/useMap'
 import { useViewMode } from '@/contexts/ViewModeContext'
 import StoreSlideOver from '@/components/store/StoreSlideOver'
+import { getIconSvgHtml } from '@/lib/markerIcons'
 import type { StoreListItem, Category } from '@/types'
 
 const NaverMap = dynamic(() => import('@/components/map/NaverMap'), { ssr: false })
@@ -39,6 +40,7 @@ function CategoryBadge({ category }: { category: StoreListItem['category'] }) {
 function HorizontalStoreCard({ store, selected, onClick }: { store: StoreListItem; selected: boolean; onClick: () => void }) {
   return (
     <button
+      data-store-id={store.id}
       onClick={onClick}
       className={`flex-shrink-0 w-44 text-left rounded-2xl p-3 shadow-sm border transition-all ${
         selected ? 'border-blue-500 bg-blue-50 shadow-md' : 'border-gray-100 bg-white hover:shadow-md'
@@ -64,6 +66,7 @@ export default function HomePage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [mapMoved, setMapMoved] = useState(false)
+  const cardScrollRef = useRef<HTMLDivElement>(null)
   const { center, zoom, moveTo } = useMap()
   const selectedStoreId = selectedStore?.id ?? null
 
@@ -79,6 +82,17 @@ export default function HomePage() {
       .then((json) => setCategories(json.data?.categories ?? []))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!selectedStore || !cardScrollRef.current) return
+    const container = cardScrollRef.current
+    const card = container.querySelector<HTMLElement>(`[data-store-id="${selectedStore.id}"]`)
+    if (card) {
+      const containerRect = container.getBoundingClientRect()
+      const cardRect = card.getBoundingClientRect()
+      container.scrollTo({ left: container.scrollLeft + cardRect.left - containerRect.left - 16, behavior: 'smooth' })
+    }
+  }, [selectedStore])
 
   function handleStoreSelect(store: StoreListItem) {
     setSelectedStore(store)
@@ -136,7 +150,7 @@ export default function HomePage() {
           <div className="flex gap-2 px-4 pb-2 overflow-x-auto pointer-events-auto" style={{ scrollbarWidth: 'none' }}>
             <button
               onClick={() => setSelectedCategories([])}
-              className={`flex-shrink-0 text-xs px-3 py-1 rounded-full border transition-colors backdrop-blur-sm ${
+              className={`flex-shrink-0 text-xs px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm ${
                 selectedCategories.length === 0
                   ? 'bg-blue-500 text-white border-blue-500'
                   : 'bg-white/80 text-gray-600 border-gray-200'
@@ -146,25 +160,46 @@ export default function HomePage() {
             </button>
             {categories.map((cat) => {
               const active = selectedCategories.includes(cat.id)
+              const iconColor = active ? 'white' : (cat.color ?? '#6b7280')
               return (
                 <button
                   key={cat.id}
                   onClick={() => toggleCategory(cat.id)}
-                  className="flex-shrink-0 text-xs px-3 py-1 rounded-full border transition-colors whitespace-nowrap backdrop-blur-sm"
+                  title={cat.name}
+                  className="flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center justify-center"
                   style={
                     active
-                      ? { background: cat.color ?? '#38c68b', color: 'white', borderColor: cat.color ?? '#38c68b' }
-                      : { background: 'rgba(255,255,255,0.8)', color: '#6b7280', borderColor: '#e5e7eb' }
+                      ? { background: cat.color ?? '#38c68b', borderColor: cat.color ?? '#38c68b' }
+                      : { background: 'rgba(255,255,255,0.8)', borderColor: '#e5e7eb' }
                   }
                 >
-                  {cat.name}
+                  {cat.icon ? (
+                    <span
+                      className="flex items-center"
+                      dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, iconColor, 16) }}
+                    />
+                  ) : (
+                    <span className="text-xs" style={{ color: active ? 'white' : '#6b7280' }}>{cat.name}</span>
+                  )}
                 </button>
               )
             })}
+            {/* 미분류 */}
+            <button
+              onClick={() => toggleCategory('__none__')}
+              title="미분류"
+              className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm text-xs ${
+                selectedCategories.includes('__none__')
+                  ? 'bg-gray-500 text-white border-gray-500'
+                  : 'bg-white/80 text-gray-400 border-gray-200'
+              }`}
+            >
+              ?
+            </button>
           </div>
 
           {/* 가로 스크롤 카드 */}
-          <div className="flex gap-3 px-4 pb-5 overflow-x-auto pointer-events-auto" style={{ scrollbarWidth: 'none' }}>
+          <div ref={cardScrollRef} className="flex gap-3 px-4 pt-3 pb-5 overflow-x-auto pointer-events-auto" style={{ scrollbarWidth: 'none' }}>
             {loading ? (
               <div className="flex-shrink-0 w-44 h-24 bg-white/80 rounded-2xl animate-pulse" />
             ) : stores.length === 0 ? (
@@ -193,7 +228,7 @@ export default function HomePage() {
             <div className="flex gap-2 mb-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
               <button
                 onClick={() => setSelectedCategories([])}
-                className={`flex-shrink-0 text-xs px-3 py-1 rounded-full border transition-colors ${
+                className={`flex-shrink-0 text-xs px-3.5 py-2 rounded-full border transition-colors ${
                   selectedCategories.length === 0 ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-500 border-gray-200 hover:bg-gray-50'
                 }`}
               >
@@ -201,17 +236,38 @@ export default function HomePage() {
               </button>
               {categories.map((cat) => {
                 const active = selectedCategories.includes(cat.id)
+                const iconColor = active ? 'white' : (cat.color ?? '#6b7280')
                 return (
                   <button
                     key={cat.id}
                     onClick={() => toggleCategory(cat.id)}
-                    className="flex-shrink-0 text-xs px-3 py-1 rounded-full border transition-colors whitespace-nowrap"
-                    style={active ? { background: cat.color ?? '#38c68b', color: 'white', borderColor: cat.color ?? '#38c68b' } : { color: '#6b7280', borderColor: '#e5e7eb' }}
+                    title={cat.name}
+                    className="flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors flex items-center justify-center"
+                    style={active ? { background: cat.color ?? '#38c68b', borderColor: cat.color ?? '#38c68b' } : { borderColor: '#e5e7eb' }}
                   >
-                    {cat.name}
+                    {cat.icon ? (
+                      <span
+                        className="flex items-center"
+                        dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, iconColor, 16) }}
+                      />
+                    ) : (
+                      <span className="text-xs" style={{ color: active ? 'white' : '#6b7280' }}>{cat.name}</span>
+                    )}
                   </button>
                 )
               })}
+              {/* 미분류 */}
+              <button
+                onClick={() => toggleCategory('__none__')}
+                title="미분류"
+                className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors text-xs ${
+                  selectedCategories.includes('__none__')
+                    ? 'bg-gray-500 text-white border-gray-500'
+                    : 'text-gray-400 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                ?
+              </button>
             </div>
 
             <p className="text-sm text-gray-500 mb-3">총 {total}개 매장</p>
