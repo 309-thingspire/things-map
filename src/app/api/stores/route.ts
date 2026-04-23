@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calcOfficeDistance } from '@/lib/office'
 import { sanitizeAddress } from '@/lib/sanitizeAddress'
+import { findDuplicateStore } from '@/lib/checkDuplicate'
 
 export async function GET(request: NextRequest) {
   try {
@@ -112,6 +113,15 @@ export async function POST(request: NextRequest) {
     }
 
     const cleanAddress = sanitizeAddress(address)
+
+    const duplicate = await findDuplicateStore(name)
+    if (duplicate) {
+      return NextResponse.json(
+        { error: `이미 등록된 매장입니다: ${duplicate.name} (${duplicate.address})`, duplicateId: duplicate.id },
+        { status: 409 }
+      )
+    }
+
     const { officeDistanceM, walkingMinutes } = calcOfficeDistance(parseFloat(lat), parseFloat(lng))
     const resolvedNaverUrl = naverUrl || `https://map.naver.com/p/search/${encodeURIComponent(`${name} ${cleanAddress}`)}`
 

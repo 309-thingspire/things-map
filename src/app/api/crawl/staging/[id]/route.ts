@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
+import { findDuplicateStore } from '@/lib/checkDuplicate'
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,6 +21,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     if (!staging.name || !staging.address || staging.lat == null || staging.lng == null) {
       return NextResponse.json({ error: '위치 정보가 누락되어 승인할 수 없습니다.' }, { status: 400 })
+    }
+
+    const duplicate = await findDuplicateStore(staging.name)
+    if (duplicate) {
+      return NextResponse.json(
+        { error: `이미 등록된 매장입니다: ${duplicate.name} (${duplicate.address})`, duplicateId: duplicate.id },
+        { status: 409 }
+      )
     }
 
     await prisma.$transaction([

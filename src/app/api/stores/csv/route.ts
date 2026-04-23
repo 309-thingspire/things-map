@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { searchNaver } from '@/lib/crawl/naver'
 import { calcOfficeDistance } from '@/lib/office'
+import { findDuplicateStore } from '@/lib/checkDuplicate'
 
 const CSV_HEADERS = ['name', 'address', 'lat', 'lng', 'phone', 'category', 'themeTags', 'businessHours', 'naverUrl', 'walkingMinutes']
 
@@ -114,6 +115,12 @@ export async function POST(request: NextRequest) {
         if (categoryName) {
           const cat = await prisma.category.findFirst({ where: { name: { contains: categoryName } } })
           categoryId = cat?.id ?? null
+        }
+
+        const dup = await findDuplicateStore(name)
+        if (dup) {
+          results.failed.push(`${name} (중복: 이미 등록됨)`)
+          continue
         }
 
         const { officeDistanceM, walkingMinutes } = calcOfficeDistance(lat, lng)

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { searchNaver } from '@/lib/crawl/naver'
 import { calcOfficeDistance } from '@/lib/office'
+import { findDuplicateStore } from '@/lib/checkDuplicate'
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -56,6 +57,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
           where: { name: { contains: categoryName, mode: 'insensitive' } },
         })
         categoryId = cat?.id ?? null
+      }
+
+      const duplicate = await findDuplicateStore(naverData?.name ?? storeName)
+      if (duplicate) {
+        return NextResponse.json(
+          { error: `이미 등록된 매장입니다: ${duplicate.name} (${duplicate.address})`, duplicateId: duplicate.id },
+          { status: 409 }
+        )
       }
 
       const { officeDistanceM, walkingMinutes } = calcOfficeDistance(lat, lng)
