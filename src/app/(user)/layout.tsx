@@ -6,9 +6,10 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { ViewModeProvider, useViewMode } from '@/contexts/ViewModeContext'
-import { Map, List, ClipboardList, X, LayoutDashboard } from 'lucide-react'
+import { Map, List, ClipboardList, X, LayoutDashboard, Bot } from 'lucide-react'
 import RequestModal from '@/components/store/RequestModal'
 import LoginPromptModal from '@/components/store/LoginPromptModal'
+import AiChatModal, { type Message as ChatMessage } from '@/components/ai/AiChatModal'
 import type { ReactNode } from 'react'
 
 function getAvatarColor(name: string): string {
@@ -26,7 +27,14 @@ function NavContent() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [requestOpen, setRequestOpen] = useState(false)
   const [loginPromptOpen, setLoginPromptOpen] = useState(false)
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [showBotTooltip, setShowBotTooltip] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!localStorage.getItem('ddingbot_used')) setShowBotTooltip(true)
+  }, [])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -66,6 +74,33 @@ function NavContent() {
           >
             <ClipboardList size={17} />
           </button>
+          <div className="relative">
+            <button
+              onClick={() => {
+                if (user) {
+                  setChatOpen(true)
+                  if (showBotTooltip) {
+                    setShowBotTooltip(false)
+                    localStorage.setItem('ddingbot_used', '1')
+                  }
+                } else {
+                  setLoginPromptOpen(true)
+                }
+              }}
+              className={iconBtnCls}
+              title="띵봇 AI 추천"
+            >
+              <Bot size={17} />
+            </button>
+            {showBotTooltip && (
+              <div className="absolute top-full right-0 mt-2 z-30 pointer-events-none">
+                <div className="relative bg-gray-900 text-white text-xs rounded-lg px-3 py-1.5 whitespace-nowrap shadow-lg">
+                  <span className="absolute -top-[4px] right-3 w-0 h-0 border-l-4 border-r-4 border-b-[4px] border-l-transparent border-r-transparent border-b-gray-900" />
+                  띵봇에게 물어보세요 🤖
+                </div>
+              </div>
+            )}
+          </div>
           {isListMode && (
             <button onClick={() => setViewMode('map')} className={`${iconBtnCls} text-gray-400`} title="닫기">
               <X size={17} />
@@ -123,6 +158,13 @@ function NavContent() {
       )}
 
       {requestOpen && <RequestModal onClose={() => setRequestOpen(false)} />}
+      {loginPromptOpen && <LoginPromptModal onClose={() => setLoginPromptOpen(false)} />}
+      <AiChatModal
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        messages={chatMessages}
+        onMessages={setChatMessages}
+      />
     </nav>
   )
 }

@@ -133,6 +133,16 @@ export default function HomePage() {
     }
   }, [selectedStore])
 
+  useEffect(() => {
+    function handler(e: Event) {
+      const storeId = (e as CustomEvent<{ storeId: string }>).detail.storeId
+      const store = stores.find((s) => s.id === storeId)
+      if (store) setSelectedStore(store)
+    }
+    window.addEventListener('ddingbot:selectStore', handler)
+    return () => window.removeEventListener('ddingbot:selectStore', handler)
+  }, [stores])
+
   function handleStoreSelect(store: StoreListItem) {
     setSelectedStore(store)
   }
