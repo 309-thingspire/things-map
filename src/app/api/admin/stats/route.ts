@@ -19,8 +19,7 @@ export async function GET() {
   const [
     storeCount, userCount, pendingRequests,
     dauLogins, mauLogins, recentLogins,
-    topViewGroups, users,
-    todayVisits, monthVisits,
+    topViewGroups, todayVisits, monthVisits, users,
   ] = await Promise.all([
     prisma.store.count({ where: { status: 'ACTIVE' } }),
     prisma.user.count({ where: { isActive: true } }),

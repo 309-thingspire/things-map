@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calcOfficeDistance } from '@/lib/office'
+import { sanitizeAddress } from '@/lib/sanitizeAddress'
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,20 +14,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       prisma.storeView.create({ data: { storeId: id, userId: session.userId } }).catch(() => {})
     }
 
-    const store = await prisma.store.findUnique({
-      where: { id },
-      include: {
-        category: { select: { id: true, name: true, icon: true } },
-        menus: true,
-        internalRating: true,
-      },
-    })
+    const [store, favoriteRecord] = await Promise.all([
+      prisma.store.findUnique({
+        where: { id },
+        include: {
+          category: { select: { id: true, name: true, icon: true, color: true } },
+          menus: true,
+          internalRating: true,
+        },
+      }),
+      session ? prisma.userFavorite.findUnique({ where: { userId_storeId: { userId: session.userId, storeId: id } } }) : null,
+    ])
 
     if (!store) {
       return NextResponse.json({ error: '매장을 찾을 수 없습니다.' }, { status: 404 })
     }
 
-    return NextResponse.json({ data: store })
+    return NextResponse.json({ data: { ...store, isFavorited: !!favoriteRecord } })
   } catch {
     return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
   }
@@ -42,6 +46,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { id } = await params
     const body = await request.json()
     const { menus, ...storeData } = body
+
+    if (storeData.address) storeData.address = sanitizeAddress(storeData.address)
 
     // lat/lng가 변경되면 officeDistance 재계산
     if (storeData.lat != null && storeData.lng != null) {

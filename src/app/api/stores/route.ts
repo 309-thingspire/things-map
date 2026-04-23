@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { calcOfficeDistance } from '@/lib/office'
+import { sanitizeAddress } from '@/lib/sanitizeAddress'
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,18 +21,18 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { status: 'ACTIVE' }
 
-    // 카테고리 다중 선택 (__none__ = 미분류)
+    // 카테고리 다중 선택 (__none__ = 미분류, __featured__ = 맛집)
     if (categoriesParam) {
       const ids = categoriesParam.split(',').filter(Boolean)
       const hasNone = ids.includes('__none__')
-      const realIds = ids.filter((id) => id !== '__none__')
-      if (hasNone && realIds.length > 0) {
-        where.OR = [{ categoryId: { in: realIds } }, { categoryId: null }]
-      } else if (hasNone) {
-        where.categoryId = null
-      } else if (realIds.length > 0) {
-        where.categoryId = { in: realIds }
-      }
+      const hasFeatured = ids.includes('__featured__')
+      const realIds = ids.filter((id) => id !== '__none__' && id !== '__featured__')
+      const conditions: Record<string, unknown>[] = []
+      if (realIds.length > 0) conditions.push({ categoryId: { in: realIds } })
+      if (hasNone) conditions.push({ categoryId: null })
+      if (hasFeatured) conditions.push({ favoriteCount: { gte: 5 } })
+      if (conditions.length === 1) Object.assign(where, conditions[0])
+      else if (conditions.length > 1) where.OR = conditions
     } else if (category) {
       where.categoryId = category
     }
@@ -98,13 +99,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '필수 항목을 입력해주세요.' }, { status: 400 })
     }
 
+    const cleanAddress = sanitizeAddress(address)
     const { officeDistanceM, walkingMinutes } = calcOfficeDistance(parseFloat(lat), parseFloat(lng))
-    const resolvedNaverUrl = naverUrl || `https://map.naver.com/p/search/${encodeURIComponent(`${name} ${address}`)}`
+    const resolvedNaverUrl = naverUrl || `https://map.naver.com/p/search/${encodeURIComponent(`${name} ${cleanAddress}`)}`
 
     const store = await prisma.store.create({
       data: {
         name,
-        address,
+        address: cleanAddress,
         lat: parseFloat(lat),
         lng: parseFloat(lng),
         phone: phone ?? null,

@@ -27,6 +27,7 @@ model User {
   crawlJobs    CrawlJob[]
   logins       UserLogin[]
   storeViews   StoreView[]
+  favorites    UserFavorite[]
 
   @@map("users")
 }
@@ -83,6 +84,8 @@ model Store {
   internalRating InternalRating?
   requests      StoreRequest[]
   views         StoreView[]
+  favorites     UserFavorite[]
+  favoriteCount Int          @default(0) @map("favorite_count")
 
   @@map("stores")
 }
@@ -258,6 +261,24 @@ enum JobStatus {
   RUNNING
   DONE
   FAILED
+}
+
+// ────────────────────────────────────────
+// 즐겨찾기
+// ────────────────────────────────────────
+model UserFavorite {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  storeId   String   @map("store_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id])
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@index([userId])
+  @@index([storeId])
+  @@map("user_favorites")
 }
 
 // ────────────────────────────────────────

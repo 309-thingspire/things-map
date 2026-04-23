@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, PenLine, ExternalLink } from 'lucide-react'
+import { X, PenLine, ExternalLink, Heart } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import RatingDisplay from '@/components/store/RatingDisplay'
 import ReviewForm from '@/components/store/ReviewForm'
 import LoginPromptModal from '@/components/store/LoginPromptModal'
 import { useAuth } from '@/hooks/useAuth'
+import { getIconSvgHtml } from '@/lib/markerIcons'
 import type { StoreDetail, StoreListItem, Review } from '@/types'
 import { OFFICE } from '@/lib/office'
 
@@ -26,6 +27,8 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
   const [loginPromptOpen, setLoginPromptOpen] = useState(false)
   const [open, setOpen] = useState(false)
+  const [isFavorited, setIsFavorited] = useState(false)
+  const [favoriteCount, setFavoriteCount] = useState(0)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -39,6 +42,8 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
     setStore(null)
     setReviews([])
     setRecommendations([])
+    setIsFavorited(false)
+    setFavoriteCount(0)
 
     Promise.all([
       fetch(`/api/stores/${storeId}`).then((r) => r.ok ? r.json() : null),
@@ -46,6 +51,8 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
     ]).then(async ([storeJson, reviewsJson]) => {
       const loadedStore: StoreDetail | null = storeJson?.data ?? null
       setStore(loadedStore)
+      setIsFavorited(loadedStore?.isFavorited ?? false)
+      setFavoriteCount(loadedStore?.favoriteCount ?? 0)
       setReviews(reviewsJson?.data.reviews ?? [])
 
       if (loadedStore?.category?.id) {
@@ -59,6 +66,18 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
       }
     }).finally(() => setLoading(false))
   }, [storeId])
+
+  async function toggleFavorite() {
+    if (!user) { setLoginPromptOpen(true); return }
+    if (!store) return
+    const method = isFavorited ? 'DELETE' : 'POST'
+    const res = await fetch(`/api/stores/${store.id}/favorite`, { method })
+    if (res.ok) {
+      const next = !isFavorited
+      setIsFavorited(next)
+      setFavoriteCount((c) => next ? c + 1 : Math.max(0, c - 1))
+    }
+  }
 
   function handleClose() {
     setOpen(false)
@@ -91,13 +110,36 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
-          <span className="font-semibold text-gray-900 truncate pr-2">{store?.name ?? '불러오는 중...'}</span>
-          <button
-            onClick={handleClose}
-            className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors shrink-0"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-1.5 min-w-0 pr-2">
+            {favoriteCount >= 5 && (
+              <span
+                className="shrink-0"
+                dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 16) }}
+              />
+            )}
+            <span className="font-semibold text-gray-900 truncate">{store?.name ?? '불러오는 중...'}</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={toggleFavorite}
+              className="flex items-center gap-1 p-1.5 rounded-full transition-colors hover:bg-gray-100"
+              title={isFavorited ? '즐겨찾기 해제' : '즐겨찾기'}
+            >
+              <Heart
+                size={16}
+                className={isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-400'}
+              />
+              {favoriteCount > 0 && (
+                <span className={`text-xs font-medium ${isFavorited ? 'text-red-500' : 'text-gray-400'}`}>{favoriteCount}</span>
+              )}
+            </button>
+            <button
+              onClick={handleClose}
+              className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable content */}
@@ -123,8 +165,12 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
                   ))}
                 </div>
 
-                {/* 매장명 — naverUrl이 있으면 링크 */}
-                <h2 className="text-xl font-bold text-gray-900">{store.name}</h2>
+                <div className="flex items-center gap-2 mt-1">
+                  {favoriteCount >= 5 && (
+                    <span dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 18) }} />
+                  )}
+                  <h2 className="text-xl font-bold text-gray-900">{store.name}</h2>
+                </div>
                 <p className="text-sm text-gray-500 mt-1">{store.address}</p>
                 {store.walkingMinutes != null && (
                   <p className="text-sm text-[#38c68b] mt-1">🏢 회사로부터 {store.walkingMinutes}분</p>

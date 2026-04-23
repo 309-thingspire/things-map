@@ -26,6 +26,8 @@ export interface StoreListItem {
   internalRating: Pick<InternalRating, 'avgTotal' | 'reviewCount'> | null
   officeDistanceM: number | null
   walkingMinutes: number | null
+  favoriteCount: number
+  isFavorited?: boolean
 }
 
 export interface Menu {
@@ -44,6 +46,8 @@ export interface StoreDetail extends StoreListItem {
   kakaoUrl: string | null
   googleUrl: string | null
   status: 'ACTIVE' | 'INACTIVE'
+  favoriteCount: number
+  isFavorited: boolean
 }
 
 export interface ReviewUser {

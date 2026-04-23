@@ -10,6 +10,15 @@ import StoreSlideOver from '@/components/store/StoreSlideOver'
 import { getIconSvgHtml } from '@/lib/markerIcons'
 import type { StoreListItem, Category } from '@/types'
 
+function AwardBadge() {
+  return (
+    <span
+      className="shrink-0"
+      dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 13) }}
+    />
+  )
+}
+
 const NaverMap = dynamic(() => import('@/components/map/NaverMap'), { ssr: false })
 
 function CategoryBadge({ category }: { category: StoreListItem['category'] }) {
@@ -47,7 +56,10 @@ function HorizontalStoreCard({ store, selected, onClick }: { store: StoreListIte
       }`}
     >
       <CategoryBadge category={store.category} />
-      <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{store.name}</p>
+      <div className="flex items-center gap-1">
+        {(store.favoriteCount ?? 0) >= 5 && <AwardBadge />}
+        <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{store.name}</p>
+      </div>
       <p className="text-[11px] text-gray-400 truncate mt-0.5">{store.address}</p>
       {store.walkingMinutes != null && (
         <p className="text-[11px] text-blue-500 mt-1">🏢 회사로부터 {store.walkingMinutes}분</p>
@@ -159,7 +171,7 @@ export default function HomePage() {
           )}
 
           {/* 카테고리 필터 */}
-          <div className="flex gap-2 px-4 pb-2 overflow-x-auto pointer-events-auto" style={{ scrollbarWidth: 'none' }}>
+          <div className="flex gap-2 px-4 overflow-x-auto pointer-events-auto" style={{ scrollbarWidth: 'none' }}>
             <button
               onClick={() => setSelectedCategories([])}
               className={`flex-shrink-0 text-sm px-4 py-2 rounded-full border transition-colors backdrop-blur-sm ${
@@ -190,6 +202,22 @@ export default function HomePage() {
                 </button>
               )
             })}
+            {/* 맛집 */}
+            <button
+              onClick={() => toggleCategory('__featured__')}
+              className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center gap-1.5 text-sm whitespace-nowrap ${
+                selectedCategories.includes('__featured__')
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white/80 text-gray-600 border-gray-200'
+              }`}
+            >
+              <span
+                dangerouslySetInnerHTML={{
+                  __html: getIconSvgHtml('award-fill', selectedCategories.includes('__featured__') ? 'white' : '#f59e0b', 16),
+                }}
+              />
+              맛집
+            </button>
             {/* 미분류 */}
             <button
               onClick={() => toggleCategory('__none__')}
@@ -259,6 +287,22 @@ export default function HomePage() {
                   </button>
                 )
               })}
+              {/* 맛집 */}
+              <button
+                onClick={() => toggleCategory('__featured__')}
+                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors flex items-center gap-1.5 text-sm whitespace-nowrap ${
+                  selectedCategories.includes('__featured__')
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                <span
+                  dangerouslySetInnerHTML={{
+                    __html: getIconSvgHtml('award-fill', selectedCategories.includes('__featured__') ? 'white' : '#f59e0b', 16),
+                  }}
+                />
+                맛집
+              </button>
               {/* 미분류 */}
               <button
                 onClick={() => toggleCategory('__none__')}
@@ -286,7 +330,10 @@ export default function HomePage() {
                     className="w-full text-left block border rounded-xl p-4 bg-white hover:shadow-md transition-all"
                   >
                     <CategoryBadge category={store.category} />
-                    <p className="font-semibold text-gray-900">{store.name}</p>
+                    <div className="flex items-center gap-1">
+                      {(store.favoriteCount ?? 0) >= 5 && <AwardBadge />}
+                      <p className="font-semibold text-gray-900">{store.name}</p>
+                    </div>
                     <p className="text-xs text-gray-500 mt-0.5">{store.address}</p>
                     <div className="flex gap-3 mt-1">
                       {store.walkingMinutes != null && (
