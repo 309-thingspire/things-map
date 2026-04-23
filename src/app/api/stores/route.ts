@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { officeDistanceM, walkingMinutes } = calcOfficeDistance(parseFloat(lat), parseFloat(lng))
+    const resolvedNaverUrl = naverUrl || `https://map.naver.com/p/search/${encodeURIComponent(`${name} ${address}`)}`
 
     const store = await prisma.store.create({
       data: {
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
         businessHours: businessHours ?? null,
         categoryId: categoryId ?? null,
         themeTags: themeTags ?? [],
-        naverUrl: naverUrl ?? null,
+        naverUrl: resolvedNaverUrl,
         kakaoUrl: kakaoUrl ?? null,
         googleUrl: googleUrl ?? null,
         officeDistanceM,

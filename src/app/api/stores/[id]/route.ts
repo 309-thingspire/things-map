@@ -43,6 +43,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       storeData.walkingMinutes = walkingMinutes
     }
 
+    // naverUrl 미전달 시 name+address로 자동생성
+    if (!storeData.naverUrl && storeData.name && storeData.address) {
+      storeData.naverUrl = `https://map.naver.com/p/search/${encodeURIComponent(`${storeData.name} ${storeData.address}`)}`
+    }
+
     const store = await prisma.store.update({
       where: { id },
       data: {

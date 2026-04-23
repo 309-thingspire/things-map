@@ -51,7 +51,7 @@ export async function searchNaver(keyword: string, start = 1, display = 5): Prom
     const { lat, lng } = katechToWgs84(parseInt(item.mapx), parseInt(item.mapy))
     const name = item.title.replace(/<[^>]+>/g, '')
     const address = item.roadAddress || item.address
-    const naverUrl = `https://map.naver.com/v5/search/${encodeURIComponent(`${name} ${address}`)}`
+    const naverUrl = `https://map.naver.com/p/search/${encodeURIComponent(`${name} ${address}`)}`
     return {
       name,
       address,
