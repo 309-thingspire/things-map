@@ -186,8 +186,8 @@ export default function HomePage() {
       )}
 
       {viewMode === 'list' && (
-        /* 목록 뷰 — 전체화면 */
-        <div className="absolute inset-0 z-[5] bg-gray-50 overflow-y-auto">
+        /* 목록 뷰 */
+        <div className="h-full bg-gray-50 overflow-y-auto">
           <div className="p-4 max-w-2xl mx-auto">
             {/* 카테고리 필터 */}
             <div className="flex gap-2 mb-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>

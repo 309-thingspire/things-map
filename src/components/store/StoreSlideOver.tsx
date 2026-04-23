@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, PenLine } from 'lucide-react'
+import { X, PenLine, ExternalLink } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import RatingDisplay from '@/components/store/RatingDisplay'
@@ -66,21 +66,26 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
 
   if (!storeId && !open) return null
 
-  const directionsUrl = store
-    ? `https://map.naver.com/v5/directions/${OFFICE.lng},${OFFICE.lat},${encodeURIComponent('띵스파이어')}/${store.lng},${store.lat},${encodeURIComponent(store.name)}/walk`
-    : ''
-
   return (
     <>
-      {/* Invisible backdrop for click-to-close */}
+      {/* Backdrop */}
       <div
         className={`fixed inset-0 z-40 ${open ? '' : 'pointer-events-none'}`}
         onClick={handleClose}
       />
 
-      {/* Floating panel */}
+      {/* Panel — full screen on mobile, floating on desktop */}
       <div
-        className={`fixed right-3 top-3 bottom-3 z-50 w-full max-w-[440px] bg-white rounded-2xl border border-gray-200 shadow-2xl flex flex-col transform transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-[calc(100%+12px)]'}`}
+        className={`
+          fixed z-50 bg-white flex flex-col shadow-2xl
+          transition-transform duration-300
+          inset-x-0 bottom-0 top-14 rounded-t-2xl border-t border-gray-200
+          sm:inset-x-auto sm:right-3 sm:top-3 sm:bottom-3 sm:w-full sm:max-w-[440px] sm:rounded-2xl sm:border
+          ${open
+            ? 'translate-y-0 sm:translate-y-0 sm:translate-x-0'
+            : 'translate-y-full sm:translate-y-0 sm:translate-x-[calc(100%+12px)]'
+          }
+        `}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
@@ -115,34 +120,28 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
                     <Badge key={tag} variant="outline">{tag}</Badge>
                   ))}
                 </div>
-                <h2 className="text-xl font-bold text-gray-900">{store.name}</h2>
+
+                {/* 매장명 — naverUrl이 있으면 링크 */}
+                {store.naverUrl ? (
+                  <a
+                    href={store.naverUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 group"
+                  >
+                    <h2 className="text-xl font-bold text-gray-900 group-hover:text-[#38c68b] transition-colors">{store.name}</h2>
+                    <ExternalLink size={14} className="text-gray-400 group-hover:text-[#38c68b] transition-colors shrink-0 mt-1" />
+                  </a>
+                ) : (
+                  <h2 className="text-xl font-bold text-gray-900">{store.name}</h2>
+                )}
+
                 <p className="text-sm text-gray-500 mt-1">{store.address}</p>
                 {store.walkingMinutes != null && (
                   <p className="text-sm text-[#38c68b] mt-1">🏢 회사로부터 {store.walkingMinutes}분</p>
                 )}
                 {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
                 {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
-
-                <div className="flex gap-2 mt-4">
-                  <a
-                    href={directionsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 text-center bg-[#38c68b] text-white py-2.5 rounded-xl text-sm font-semibold"
-                  >
-                    길찾기
-                  </a>
-                  {store.naverUrl && (
-                    <a
-                      href={store.naverUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-1 text-center border border-gray-200 text-gray-700 py-2.5 rounded-xl text-sm"
-                    >
-                      네이버 지도
-                    </a>
-                  )}
-                </div>
               </div>
 
               {/* 메뉴 */}
@@ -184,9 +183,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
                         </DialogHeader>
                         <ReviewForm
                           storeId={store.id}
-                          onSuccess={() => {
-                            setReviewDialogOpen(false)
-                          }}
+                          onSuccess={() => setReviewDialogOpen(false)}
                         />
                       </DialogContent>
                     </Dialog>

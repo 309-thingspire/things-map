@@ -1,25 +1,49 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { OFFICE } from '@/lib/office'
+import { CheckCircle, XCircle } from 'lucide-react'
 
 const NaverMap = dynamic(() => import('@/components/map/NaverMap'), { ssr: false })
+
+interface Toast {
+  type: 'success' | 'error'
+  message: string
+}
+
+function ToastBar({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 3000)
+    return () => clearTimeout(t)
+  }, [onDismiss])
+
+  return (
+    <div
+      className={`fixed top-5 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium transition-all ${
+        toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+      }`}
+    >
+      {toast.type === 'success' ? <CheckCircle size={16} /> : <XCircle size={16} />}
+      {toast.message}
+    </div>
+  )
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const [name, setName] = useState('')
   const [approvalCode, setApprovalCode] = useState('')
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [toast, setToast] = useState<Toast | null>(null)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setError('')
     setLoading(true)
+    setToast(null)
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -31,18 +55,17 @@ export default function LoginPage() {
       const json = await res.json()
 
       if (!res.ok) {
-        setError(json.error ?? '로그인에 실패했습니다.')
+        setToast({ type: 'error', message: json.error ?? '로그인에 실패했습니다.' })
         return
       }
 
-      if (json.data.role === 'ADMIN') {
-        router.push('/admin')
-      } else {
-        router.push('/')
-      }
-      router.refresh()
+      setToast({ type: 'success', message: '로그인되었습니다.' })
+      setTimeout(() => {
+        router.push(json.data.role === 'ADMIN' ? '/admin' : '/')
+        router.refresh()
+      }, 800)
     } catch {
-      setError('서버 연결에 실패했습니다.')
+      setToast({ type: 'error', message: '서버 연결에 실패했습니다.' })
     } finally {
       setLoading(false)
     }
@@ -50,6 +73,8 @@ export default function LoginPage() {
 
   return (
     <>
+      {toast && <ToastBar toast={toast} onDismiss={() => setToast(null)} />}
+
       {/* Map background */}
       <div className="fixed inset-0" style={{ zIndex: 0 }}>
         <NaverMap stores={[]} center={OFFICE} zoom={15} />
@@ -59,10 +84,7 @@ export default function LoginPage() {
       <div className="fixed inset-0 bg-black/60" style={{ zIndex: 1 }} />
 
       {/* Login form */}
-      <div
-        className="relative flex min-h-[calc(100vh-3.5rem)] items-center justify-center p-4"
-        style={{ zIndex: 2 }}
-      >
+      <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 2 }}>
         <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-8">
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold text-gray-900">띵스파이어 맛집 지도</h1>
@@ -92,10 +114,6 @@ export default function LoginPage() {
                 required
               />
             </div>
-
-            {error && (
-              <p className="text-sm text-red-500 text-center">{error}</p>
-            )}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? '로그인 중...' : '로그인'}

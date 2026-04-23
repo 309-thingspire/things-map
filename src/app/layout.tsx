@@ -3,8 +3,17 @@ import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "things-map — 커뮤니티 맛집 지도",
-  description: "커뮤니티 기반 맛집 지도 서비스",
+  title: "띵스파이어 맛집 지도",
+  description: "띵스파이어 커뮤니티 맛집 지도",
+  icons: {
+    icon: '/icons_map.png',
+    apple: '/icons_map.png',
+  },
+  openGraph: {
+    title: "띵스파이어 맛집 지도",
+    description: "띵스파이어 커뮤니티 맛집 지도",
+    images: [{ url: '/icons_map.png', width: 1254, height: 1254 }],
+  },
 };
 
 export default function RootLayout({
