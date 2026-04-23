@@ -42,5 +42,5 @@ next-env.d.ts
 
 /src/generated/prisma
 git-access-token.txt
-icons_map.png
+/icons_map.png
 things-map-members.md
