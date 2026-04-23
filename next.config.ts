@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: ['playwright', '@prisma/client', 'prisma'],
+  turbopack: {},
 };
 
 export default nextConfig;

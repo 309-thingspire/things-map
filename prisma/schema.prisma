@@ -1,0 +1,258 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────
+// 사용자
+// ────────────────────────────────────────
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  team         String
+  approvalCode String   @unique @default(uuid()) @map("approval_code")
+  role         Role     @default(USER)
+  isActive     Boolean  @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  reviews      Review[]
+  requests     StoreRequest[]
+  crawlJobs    CrawlJob[]
+
+  @@map("users")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// ────────────────────────────────────────
+// 카테고리
+// ────────────────────────────────────────
+model Category {
+  id    String  @id @default(cuid())
+  name  String  @unique   // 한식, 중식, 일식, 양식, 카페, 주점, 분식 등
+  icon  String?           // lucide 아이콘명 e.g. "utensils"
+  color String?           // 마커 색상 hex e.g. "#ef4444"
+
+  stores Store[]
+
+  @@map("categories")
+}
+
+// ────────────────────────────────────────
+// 매장
+// ────────────────────────────────────────
+model Store {
+  id            String   @id @default(cuid())
+  name          String
+  address       String
+  lat           Float
+  lng           Float
+  phone         String?
+  businessHours String?  @map("business_hours") // JSON string
+  status        StoreStatus @default(ACTIVE)
+
+  categoryId    String?  @map("category_id")
+  category      Category? @relation(fields: [categoryId], references: [id])
+
+  themeTags     String[] @map("theme_tags")  // ["데이트", "혼밥", "주차"]
+
+  naverUrl      String?  @map("naver_url")
+  kakaoUrl      String?  @map("kakao_url")
+  googleUrl     String?  @map("google_url")
+
+  officeDistanceM Int?   @map("office_distance_m")   // 회사까지 직선 거리 (m)
+  walkingMinutes  Int?   @map("walking_minutes")      // 도보 예상 시간 (분)
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  menus         Menu[]
+  reviews       Review[]
+  internalRating InternalRating?
+  requests      StoreRequest[]
+
+  @@map("stores")
+}
+
+enum StoreStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ────────────────────────────────────────
+// 메뉴
+// ────────────────────────────────────────
+model Menu {
+  id               String  @id @default(cuid())
+  storeId          String  @map("store_id")
+  store            Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name             String
+  price            Int?
+  isRepresentative Boolean @default(false) @map("is_representative")
+
+  @@map("menus")
+}
+
+// ────────────────────────────────────────
+// 내부 평점 (집계)
+// ────────────────────────────────────────
+model InternalRating {
+  id             String   @id @default(cuid())
+  storeId        String   @unique @map("store_id")
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  avgTotal       Float    @default(0) @map("avg_total")
+  avgTaste       Float    @default(0) @map("avg_taste")
+  avgPrice       Float    @default(0) @map("avg_price")
+  avgService     Float    @default(0) @map("avg_service")
+  avgAmbiance    Float    @default(0) @map("avg_ambiance")
+  avgCleanliness Float    @default(0) @map("avg_cleanliness")
+  reviewCount    Int      @default(0) @map("review_count")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("internal_ratings")
+}
+
+// ────────────────────────────────────────
+// 리뷰
+// ────────────────────────────────────────
+model Review {
+  id               String       @id @default(cuid())
+  storeId          String       @map("store_id")
+  store            Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId           String       @map("user_id")
+  user             User         @relation(fields: [userId], references: [id])
+
+  scoreTotal       Float        @map("score_total")
+  scoreTaste       Float        @map("score_taste")
+  scorePrice       Float        @map("score_price")
+  scoreService     Float        @map("score_service")
+  scoreAmbiance    Float        @map("score_ambiance")
+  scoreCleanliness Float        @map("score_cleanliness")
+
+  content          String?
+  visitedAt        DateTime?    @map("visited_at")
+  likes            Int          @default(0)
+  status           ReviewStatus @default(ACTIVE)
+
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  @@unique([storeId, userId]) // 매장당 1인 1리뷰
+  @@map("reviews")
+}
+
+enum ReviewStatus {
+  ACTIVE
+  HIDDEN
+  REPORTED
+}
+
+// ────────────────────────────────────────
+// 매장 등록 요청
+// ────────────────────────────────────────
+model StoreRequest {
+  id          String        @id @default(cuid())
+  userId      String        @map("user_id")
+  user        User          @relation(fields: [userId], references: [id])
+  storeId     String?       @map("store_id")  // 수정 요청 시 기존 매장 참조
+  store       Store?        @relation(fields: [storeId], references: [id])
+
+  requestType RequestType   @map("request_type")
+  payload     Json          // 요청한 매장 정보 전체
+  status      RequestStatus @default(PENDING)
+  adminNote   String?       @map("admin_note")
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+  reviewedAt  DateTime?     @map("reviewed_at")
+
+  @@map("store_requests")
+}
+
+enum RequestType {
+  NEW
+  EDIT
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ────────────────────────────────────────
+// 수집 임시 저장 (Staging)
+// ────────────────────────────────────────
+model StagingStore {
+  id         String        @id @default(cuid())
+  crawlJobId String?       @map("crawl_job_id")
+  crawlJob   CrawlJob?     @relation(fields: [crawlJobId], references: [id])
+
+  rawData    Json          @map("raw_data")   // API/Playwright 원본 데이터
+  name       String
+  address    String
+  lat        Float?
+  lng        Float?
+  phone      String?
+  businessHours String?   @map("business_hours")
+  categoryId String?      @map("category_id")
+  themeTags  String[]     @map("theme_tags")
+  menus      Json?        // [{name, price, isRepresentative}]
+
+  status     StagingStatus @default(PENDING)
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  @@map("staging_stores")
+}
+
+enum StagingStatus {
+  PENDING    // 검토 대기
+  APPROVED   // 승인 → Store 테이블로 이동
+  REJECTED   // 버림
+}
+
+// ────────────────────────────────────────
+// 수집 작업 이력
+// ────────────────────────────────────────
+model CrawlJob {
+  id          String      @id @default(cuid())
+  platform    Platform
+  keyword     String
+  source      CrawlSource @default(API)
+  status      JobStatus   @default(PENDING)
+  resultCount Int         @default(0) @map("result_count")
+  adminId     String?     @map("admin_id")
+  admin       User?       @relation(fields: [adminId], references: [id])
+  executedAt  DateTime    @default(now()) @map("executed_at")
+
+  stagingStores StagingStore[]
+
+  @@map("crawl_jobs")
+}
+
+enum Platform {
+  KAKAO
+  NAVER
+  PLAYWRIGHT
+}
+
+enum CrawlSource {
+  API        // 공식 API (자동)
+  PLAYWRIGHT // Playwright 단건 (수동)
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
+}
