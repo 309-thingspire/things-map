@@ -210,7 +210,7 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
                 send()
               }
             }}
-            placeholder="질문을 입력하세요... (Shift+Enter로 줄바꿈)"
+            placeholder="질문을 입력하세요"
             rows={1}
             className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
             style={{ fontSize: '16px' }}
