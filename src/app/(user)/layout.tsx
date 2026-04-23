@@ -134,8 +134,9 @@ function UserLayoutInner({ children }: { children: ReactNode }) {
         <header className={isListMode
           ? 'h-14 flex items-center justify-between px-4 z-20 shrink-0 bg-white border-b shadow-sm'
           : 'absolute top-0 left-0 right-0 h-14 flex items-center justify-between px-4 z-20'}>
-          <Link href="/">
+          <Link href="/" className="flex items-center gap-2">
             <Image src="/logo.avif" alt="띵스파이어" width={120} height={32} className="h-8 w-auto object-contain" />
+            <Image src="/icons_map.png" alt="" width={32} height={32} className="h-8 w-auto object-contain" />
           </Link>
           <NavContent />
         </header>
