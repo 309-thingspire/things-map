@@ -133,6 +133,7 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
     if (navigator.geolocation) {
       watchIdRef.current = navigator.geolocation.watchPosition(
         (pos) => {
+          if (!window.naver?.maps) return
           const position = new window.naver.maps.LatLng(pos.coords.latitude, pos.coords.longitude)
           const heading = pos.coords.heading != null && !isNaN(pos.coords.heading) ? pos.coords.heading : headingRef.current
           if (!locationMarkerRef.current) {

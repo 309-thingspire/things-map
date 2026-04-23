@@ -6,7 +6,8 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { ViewModeProvider, useViewMode } from '@/contexts/ViewModeContext'
-import { Map, List, ClipboardList, Settings, X, LayoutDashboard } from 'lucide-react'
+import { Map, List, ClipboardList, X, LayoutDashboard } from 'lucide-react'
+import RequestModal from '@/components/store/RequestModal'
 import type { ReactNode } from 'react'
 
 function getAvatarColor(name: string): string {
@@ -22,6 +23,7 @@ function NavContent() {
   const isMapPage = pathname === '/'
   const { viewMode, setViewMode } = useViewMode()
   const [profileOpen, setProfileOpen] = useState(false)
+  const [requestOpen, setRequestOpen] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -55,9 +57,9 @@ function NavContent() {
               </button>
             )
           )}
-          <Link href="/request" className={iconBtnCls} title="매장 등록 요청">
+          <button onClick={() => setRequestOpen(true)} className={iconBtnCls} title="매장 등록 요청">
             <ClipboardList size={17} />
-          </Link>
+          </button>
           {isListMode && (
             <button onClick={() => setViewMode('map')} className={`${iconBtnCls} text-gray-400`} title="닫기">
               <X size={17} />
@@ -113,6 +115,8 @@ function NavContent() {
           로그인
         </Link>
       )}
+
+      {requestOpen && <RequestModal onClose={() => setRequestOpen(false)} />}
     </nav>
   )
 }
