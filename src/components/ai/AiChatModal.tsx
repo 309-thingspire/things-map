@@ -80,6 +80,11 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
         }),
       })
 
+      if (res.status === 502) {
+        onMessages([...history, { role: 'assistant', content: '관리자 서버가 현재 연결되지 않아 띵봇을 사용할 수 없어요 😢 잠시 후 다시 시도해주세요!' }])
+        setLoading(false)
+        return
+      }
       if (!res.ok || !res.body) throw new Error('응답 오류')
 
       const reader = res.body.getReader()
@@ -208,6 +213,7 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
             placeholder="질문을 입력하세요... (Shift+Enter로 줄바꿈)"
             rows={1}
             className="flex-1 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:bg-gray-50"
+            style={{ fontSize: '16px' }}
             disabled={loading}
           />
           <button
