@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, PenLine, ExternalLink, Heart } from 'lucide-react'
+import { X, PenLine, Heart } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import RatingDisplay from '@/components/store/RatingDisplay'
@@ -12,13 +12,23 @@ import { getIconSvgHtml } from '@/lib/markerIcons'
 import type { StoreDetail, StoreListItem, Review } from '@/types'
 import { OFFICE } from '@/lib/office'
 
+function NaverIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+      <rect width="20" height="20" rx="3" fill="#03C75A" />
+      <path d="M5 15V5h2.8l4.4 7V5H15v10h-2.8l-4.4-7v7H5z" fill="white" />
+    </svg>
+  )
+}
+
 interface Props {
   storeId: string | null
   onClose: () => void
   onStoreSelect?: (store: StoreListItem) => void
+  onFavoriteChange?: (isFavorited: boolean) => void
 }
 
-export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Props) {
+export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavoriteChange }: Props) {
   const { user } = useAuth()
   const [store, setStore] = useState<StoreDetail | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
@@ -76,6 +86,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
       const next = !isFavorited
       setIsFavorited(next)
       setFavoriteCount((c) => next ? c + 1 : Math.max(0, c - 1))
+      onFavoriteChange?.(next)
     }
   }
 
@@ -112,34 +123,13 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
         <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
           <div className="flex items-center gap-1.5 min-w-0 pr-2">
             {favoriteCount >= 5 && (
-              <span
-                className="shrink-0"
-                dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 16) }}
-              />
+              <span className="shrink-0" dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 16) }} />
             )}
             <span className="font-semibold text-gray-900 truncate">{store?.name ?? '불러오는 중...'}</span>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={toggleFavorite}
-              className="flex items-center gap-1 p-1.5 rounded-full transition-colors hover:bg-gray-100"
-              title={isFavorited ? '즐겨찾기 해제' : '즐겨찾기'}
-            >
-              <Heart
-                size={16}
-                className={isFavorited ? 'fill-red-500 text-red-500' : 'text-gray-400'}
-              />
-              {favoriteCount > 0 && (
-                <span className={`text-xs font-medium ${isFavorited ? 'text-red-500' : 'text-gray-400'}`}>{favoriteCount}</span>
-              )}
-            </button>
-            <button
-              onClick={handleClose}
-              className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            >
-              <X size={16} />
-            </button>
-          </div>
+          <button onClick={handleClose} className="shrink-0 p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+            <X size={16} />
+          </button>
         </div>
 
         {/* Scrollable content */}
@@ -178,17 +168,27 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
                 {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
                 {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
 
-                {store.naverUrl && (
-                  <a
-                    href={store.naverUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 mt-3 text-sm text-gray-500 hover:text-[#03C75A] transition-colors"
+                <div className="flex items-center gap-4 mt-3">
+                  {store.naverUrl && (
+                    <a
+                      href={store.naverUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 text-sm font-medium text-[#03C75A] hover:opacity-75 transition-opacity"
+                    >
+                      <NaverIcon size={16} />
+                      지도보기
+                    </a>
+                  )}
+                  <button
+                    onClick={toggleFavorite}
+                    className={`flex items-center gap-1 text-sm transition-colors ${isFavorited ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}
+                    title={isFavorited ? '즐겨찾기 해제' : '즐겨찾기'}
                   >
-                    <ExternalLink size={13} />
-                    네이버 지도에서 보기
-                  </a>
-                )}
+                    <Heart size={16} className={isFavorited ? 'fill-red-500' : ''} />
+                    {favoriteCount > 0 && <span className="text-xs font-medium">{favoriteCount}</span>}
+                  </button>
+                </div>
               </div>
 
               {/* 메뉴 */}

@@ -6,6 +6,7 @@ import { LocateFixed } from 'lucide-react'
 import { useStores } from '@/hooks/useStores'
 import { useMap, DEFAULT_CENTER, DEFAULT_ZOOM } from '@/hooks/useMap'
 import { useViewMode } from '@/contexts/ViewModeContext'
+import { useAuth } from '@/hooks/useAuth'
 import StoreSlideOver from '@/components/store/StoreSlideOver'
 import { getIconSvgHtml } from '@/lib/markerIcons'
 import type { StoreListItem, Category } from '@/types'
@@ -73,11 +74,14 @@ function HorizontalStoreCard({ store, selected, onClick }: { store: StoreListIte
 
 export default function HomePage() {
   const { viewMode } = useViewMode()
+  const { user } = useAuth()
   const [selectedStore, setSelectedStore] = useState<StoreListItem | null>(null)
   const [detailStoreId, setDetailStoreId] = useState<string | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [mapMoved, setMapMoved] = useState(false)
+  const [hasFeaturedStores, setHasFeaturedStores] = useState(false)
+  const [hasMyFavorites, setHasMyFavorites] = useState(false)
   const cardScrollRef = useRef<HTMLDivElement>(null)
   const { center, zoom, moveTo } = useMap()
   const selectedStoreId = selectedStore?.id ?? null
@@ -89,11 +93,22 @@ export default function HomePage() {
   })
 
   useEffect(() => {
-    fetch('/api/categories')
-      .then((r) => r.json())
-      .then((json) => setCategories(json.data?.categories ?? []))
-      .catch(() => {})
+    Promise.all([
+      fetch('/api/categories').then((r) => r.json()),
+      fetch('/api/stores?categories=__featured__&limit=1').then((r) => r.json()),
+    ]).then(([catJson, featJson]) => {
+      setCategories(catJson.data?.categories ?? [])
+      setHasFeaturedStores((featJson.data?.total ?? 0) > 0)
+    }).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (!user) { setHasMyFavorites(false); return }
+    fetch('/api/user/favorites')
+      .then((r) => r.json())
+      .then((j) => setHasMyFavorites((j.data?.count ?? 0) > 0))
+      .catch(() => {})
+  }, [user])
 
   // 페이지 방문 기록 (비로그인 포함)
   useEffect(() => {
@@ -182,6 +197,34 @@ export default function HomePage() {
             >
               전체
             </button>
+            {/* 맛집 — 있을 때만 */}
+            {hasFeaturedStores && (
+              <button
+                onClick={() => toggleCategory('__featured__')}
+                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center gap-1.5 text-sm whitespace-nowrap ${
+                  selectedCategories.includes('__featured__')
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white/80 text-gray-600 border-gray-200'
+                }`}
+              >
+                <span dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', selectedCategories.includes('__featured__') ? 'white' : '#f59e0b', 16) }} />
+                맛집
+              </button>
+            )}
+            {/* 즐겨찾기 — 사용자 즐겨찾기 있을 때만 */}
+            {hasMyFavorites && (
+              <button
+                onClick={() => toggleCategory('__favorite__')}
+                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center gap-1.5 text-sm whitespace-nowrap ${
+                  selectedCategories.includes('__favorite__')
+                    ? 'bg-red-500 text-white border-red-500'
+                    : 'bg-white/80 text-gray-600 border-gray-200'
+                }`}
+              >
+                <span dangerouslySetInnerHTML={{ __html: getIconSvgHtml('heart', selectedCategories.includes('__favorite__') ? 'white' : '#ef4444', 16) }} />
+                즐겨찾기
+              </button>
+            )}
             {categories.map((cat) => {
               const active = selectedCategories.includes(cat.id)
               return (
@@ -193,31 +236,12 @@ export default function HomePage() {
                   }`}
                 >
                   {cat.icon && (
-                    <span
-                      className="flex items-center"
-                      dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 16) }}
-                    />
+                    <span className="flex items-center" dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 16) }} />
                   )}
                   {cat.name}
                 </button>
               )
             })}
-            {/* 맛집 */}
-            <button
-              onClick={() => toggleCategory('__featured__')}
-              className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center gap-1.5 text-sm whitespace-nowrap ${
-                selectedCategories.includes('__featured__')
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'bg-white/80 text-gray-600 border-gray-200'
-              }`}
-            >
-              <span
-                dangerouslySetInnerHTML={{
-                  __html: getIconSvgHtml('award-fill', selectedCategories.includes('__featured__') ? 'white' : '#f59e0b', 16),
-                }}
-              />
-              맛집
-            </button>
             {/* 미분류 */}
             <button
               onClick={() => toggleCategory('__none__')}
@@ -254,19 +278,41 @@ export default function HomePage() {
       )}
 
       {viewMode === 'list' && (
-        /* 목록 뷰 — 전체화면, 네비 높이(56px) + 16px 패딩 */
-        <div className="absolute inset-0 z-[5] bg-gray-50 overflow-y-auto pt-[72px]">
-          <div className="p-4 max-w-2xl mx-auto">
-            {/* 카테고리 필터 */}
-            <div className="flex gap-2 mb-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        /* 목록 뷰 — 카테고리 고정 + 리스트 스크롤 */
+        <div className="absolute inset-0 z-[5] bg-gray-50 flex flex-col overflow-hidden pt-[56px]">
+          {/* 고정 카테고리 */}
+          <div className="shrink-0 bg-gray-50 px-4 pt-4 pb-3 border-b border-gray-100">
+            <div className="max-w-2xl mx-auto flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
               <button
                 onClick={() => setSelectedCategories([])}
-                className={`flex-shrink-0 text-xs px-3.5 py-2 rounded-full border transition-colors ${
-                  selectedCategories.length === 0 ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-500 border-gray-200 hover:bg-gray-50'
+                className={`flex-shrink-0 text-sm px-4 py-2 rounded-full border transition-colors ${
+                  selectedCategories.length === 0 ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 전체
               </button>
+              {hasFeaturedStores && (
+                <button
+                  onClick={() => toggleCategory('__featured__')}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors flex items-center gap-1.5 text-sm whitespace-nowrap ${
+                    selectedCategories.includes('__featured__') ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', selectedCategories.includes('__featured__') ? 'white' : '#f59e0b', 16) }} />
+                  맛집
+                </button>
+              )}
+              {hasMyFavorites && (
+                <button
+                  onClick={() => toggleCategory('__favorite__')}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors flex items-center gap-1.5 text-sm whitespace-nowrap ${
+                    selectedCategories.includes('__favorite__') ? 'bg-red-500 text-white border-red-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span dangerouslySetInnerHTML={{ __html: getIconSvgHtml('heart', selectedCategories.includes('__favorite__') ? 'white' : '#ef4444', 16) }} />
+                  즐겨찾기
+                </button>
+              )}
               {categories.map((cat) => {
                 const active = selectedCategories.includes(cat.id)
                 return (
@@ -278,74 +324,57 @@ export default function HomePage() {
                     }`}
                   >
                     {cat.icon && (
-                      <span
-                        className="flex items-center"
-                        dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 16) }}
-                      />
+                      <span className="flex items-center" dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 16) }} />
                     )}
                     {cat.name}
                   </button>
                 )
               })}
-              {/* 맛집 */}
-              <button
-                onClick={() => toggleCategory('__featured__')}
-                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors flex items-center gap-1.5 text-sm whitespace-nowrap ${
-                  selectedCategories.includes('__featured__')
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'text-gray-600 border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                <span
-                  dangerouslySetInnerHTML={{
-                    __html: getIconSvgHtml('award-fill', selectedCategories.includes('__featured__') ? 'white' : '#f59e0b', 16),
-                  }}
-                />
-                맛집
-              </button>
-              {/* 미분류 */}
               <button
                 onClick={() => toggleCategory('__none__')}
                 className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors text-sm ${
-                  selectedCategories.includes('__none__')
-                    ? 'bg-blue-500 text-white border-blue-500'
-                    : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                  selectedCategories.includes('__none__') ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 미분류
               </button>
             </div>
+          </div>
 
-            <p className="text-sm text-gray-500 mb-3">총 {total}개 매장</p>
-            <div className="space-y-2">
-              {loading ? (
-                <p className="text-center text-gray-400 py-8">불러오는 중...</p>
-              ) : stores.length === 0 ? (
-                <p className="text-center text-gray-400 py-8">매장이 없습니다.</p>
-              ) : (
-                stores.map((store) => (
-                  <button
-                    key={store.id}
-                    onClick={() => setDetailStoreId(store.id)}
-                    className="w-full text-left block border rounded-xl p-4 bg-white hover:shadow-md transition-all"
-                  >
-                    <CategoryBadge category={store.category} />
-                    <div className="flex items-center gap-1">
-                      {(store.favoriteCount ?? 0) >= 5 && <AwardBadge />}
-                      <p className="font-semibold text-gray-900">{store.name}</p>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-0.5">{store.address}</p>
-                    <div className="flex gap-3 mt-1">
-                      {store.walkingMinutes != null && (
-                        <span className="text-xs text-blue-500">🏢 회사로부터 {store.walkingMinutes}분</span>
-                      )}
-                      {store.internalRating && (
-                        <span className="text-xs text-amber-500">★ {store.internalRating.avgTotal.toFixed(1)}</span>
-                      )}
-                    </div>
-                  </button>
-                ))
-              )}
+          {/* 스크롤 리스트 */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="px-4 py-3 max-w-2xl mx-auto">
+              <p className="text-sm text-gray-500 mb-3">총 {total}개 매장</p>
+              <div className="space-y-2 pb-4">
+                {loading ? (
+                  <p className="text-center text-gray-400 py-8">불러오는 중...</p>
+                ) : stores.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8">매장이 없습니다.</p>
+                ) : (
+                  stores.map((store) => (
+                    <button
+                      key={store.id}
+                      onClick={() => setDetailStoreId(store.id)}
+                      className="w-full text-left block border rounded-xl p-4 bg-white hover:shadow-md transition-all"
+                    >
+                      <CategoryBadge category={store.category} />
+                      <div className="flex items-center gap-1">
+                        {(store.favoriteCount ?? 0) >= 5 && <AwardBadge />}
+                        <p className="font-semibold text-gray-900">{store.name}</p>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-0.5">{store.address}</p>
+                      <div className="flex gap-3 mt-1">
+                        {store.walkingMinutes != null && (
+                          <span className="text-xs text-blue-500">🏢 회사로부터 {store.walkingMinutes}분</span>
+                        )}
+                        {store.internalRating && (
+                          <span className="text-xs text-amber-500">★ {store.internalRating.avgTotal.toFixed(1)}</span>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -358,6 +387,9 @@ export default function HomePage() {
           setDetailStoreId(store.id)
           setSelectedStore(store)
           moveTo(store.lat, store.lng, 17)
+        }}
+        onFavoriteChange={(isFavorited) => {
+          if (isFavorited) setHasMyFavorites(true)
         }}
       />
     </div>

@@ -21,16 +21,28 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { status: 'ACTIVE' }
 
-    // 카테고리 다중 선택 (__none__ = 미분류, __featured__ = 맛집)
+    // 카테고리 다중 선택 (__none__ = 미분류, __featured__ = 맛집, __favorite__ = 내 즐겨찾기)
     if (categoriesParam) {
       const ids = categoriesParam.split(',').filter(Boolean)
       const hasNone = ids.includes('__none__')
       const hasFeatured = ids.includes('__featured__')
-      const realIds = ids.filter((id) => id !== '__none__' && id !== '__featured__')
+      const hasFavorite = ids.includes('__favorite__')
+      const realIds = ids.filter((id) => !['__none__', '__featured__', '__favorite__'].includes(id))
       const conditions: Record<string, unknown>[] = []
       if (realIds.length > 0) conditions.push({ categoryId: { in: realIds } })
       if (hasNone) conditions.push({ categoryId: null })
       if (hasFeatured) conditions.push({ favoriteCount: { gte: 5 } })
+      if (hasFavorite) {
+        const { getSession } = await import('@/lib/auth')
+        const session = await getSession()
+        if (session) {
+          const favs = await prisma.userFavorite.findMany({
+            where: { userId: session.userId },
+            select: { storeId: true },
+          })
+          conditions.push({ id: { in: favs.map((f) => f.storeId) } })
+        }
+      }
       if (conditions.length === 1) Object.assign(where, conditions[0])
       else if (conditions.length > 1) where.OR = conditions
     } else if (category) {
