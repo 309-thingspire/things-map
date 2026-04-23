@@ -160,41 +160,34 @@ export default function HomePage() {
             </button>
             {categories.map((cat) => {
               const active = selectedCategories.includes(cat.id)
-              const iconColor = active ? 'white' : (cat.color ?? '#6b7280')
               return (
                 <button
                   key={cat.id}
                   onClick={() => toggleCategory(cat.id)}
-                  title={cat.name}
-                  className="flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center justify-center"
-                  style={
-                    active
-                      ? { background: cat.color ?? '#38c68b', borderColor: cat.color ?? '#38c68b' }
-                      : { background: 'rgba(255,255,255,0.8)', borderColor: '#e5e7eb' }
-                  }
+                  className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm flex items-center gap-1.5 text-xs whitespace-nowrap ${
+                    active ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/80 text-gray-600 border-gray-200'
+                  }`}
                 >
-                  {cat.icon ? (
+                  {cat.icon && (
                     <span
                       className="flex items-center"
-                      dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, iconColor, 16) }}
+                      dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 14) }}
                     />
-                  ) : (
-                    <span className="text-xs" style={{ color: active ? 'white' : '#6b7280' }}>{cat.name}</span>
                   )}
+                  {cat.name}
                 </button>
               )
             })}
             {/* 미분류 */}
             <button
               onClick={() => toggleCategory('__none__')}
-              title="미분류"
               className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors backdrop-blur-sm text-xs ${
                 selectedCategories.includes('__none__')
-                  ? 'bg-gray-500 text-white border-gray-500'
-                  : 'bg-white/80 text-gray-400 border-gray-200'
+                  ? 'bg-blue-500 text-white border-blue-500'
+                  : 'bg-white/80 text-gray-600 border-gray-200'
               }`}
             >
-              ?
+              미분류
             </button>
           </div>
 
@@ -236,37 +229,34 @@ export default function HomePage() {
               </button>
               {categories.map((cat) => {
                 const active = selectedCategories.includes(cat.id)
-                const iconColor = active ? 'white' : (cat.color ?? '#6b7280')
                 return (
                   <button
                     key={cat.id}
                     onClick={() => toggleCategory(cat.id)}
-                    title={cat.name}
-                    className="flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors flex items-center justify-center"
-                    style={active ? { background: cat.color ?? '#38c68b', borderColor: cat.color ?? '#38c68b' } : { borderColor: '#e5e7eb' }}
+                    className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors flex items-center gap-1.5 text-xs whitespace-nowrap ${
+                      active ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}
                   >
-                    {cat.icon ? (
+                    {cat.icon && (
                       <span
                         className="flex items-center"
-                        dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, iconColor, 16) }}
+                        dangerouslySetInnerHTML={{ __html: getIconSvgHtml(cat.icon, active ? 'white' : '#6b7280', 14) }}
                       />
-                    ) : (
-                      <span className="text-xs" style={{ color: active ? 'white' : '#6b7280' }}>{cat.name}</span>
                     )}
+                    {cat.name}
                   </button>
                 )
               })}
               {/* 미분류 */}
               <button
                 onClick={() => toggleCategory('__none__')}
-                title="미분류"
                 className={`flex-shrink-0 px-3.5 py-2 rounded-full border transition-colors text-xs ${
                   selectedCategories.includes('__none__')
-                    ? 'bg-gray-500 text-white border-gray-500'
-                    : 'text-gray-400 border-gray-200 hover:bg-gray-50'
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'text-gray-600 border-gray-200 hover:bg-gray-50'
                 }`}
               >
-                ?
+                미분류
               </button>
             </div>
 
