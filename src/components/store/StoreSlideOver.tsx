@@ -168,13 +168,13 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                 {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
                 {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
 
-                <div className="flex items-center gap-4 mt-3">
+                <div className="flex items-center gap-2 mt-3">
                   {store.naverUrl && (
                     <a
                       href={store.naverUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 text-sm font-medium text-[#03C75A] hover:opacity-75 transition-opacity"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#03C75A] text-white hover:bg-[#02b350] transition-colors"
                     >
                       <NaverIcon size={16} />
                       지도보기
@@ -182,11 +182,13 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                   )}
                   <button
                     onClick={toggleFavorite}
-                    className={`flex items-center gap-1 text-sm transition-colors ${isFavorited ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}
+                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                      isFavorited ? 'text-red-500 hover:text-red-600' : 'text-gray-400 hover:text-red-400'
+                    }`}
                     title={isFavorited ? '즐겨찾기 해제' : '즐겨찾기'}
                   >
-                    <Heart size={16} className={isFavorited ? 'fill-red-500' : ''} />
-                    {favoriteCount > 0 && <span className="text-xs font-medium">{favoriteCount}</span>}
+                    <Heart size={18} className={isFavorited ? 'fill-red-500' : ''} />
+                    {favoriteCount > 0 && <span className="font-medium">{favoriteCount}</span>}
                   </button>
                 </div>
               </div>

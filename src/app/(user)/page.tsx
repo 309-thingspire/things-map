@@ -138,9 +138,7 @@ export default function HomePage() {
   }
 
   function toggleCategory(id: string) {
-    setSelectedCategories((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    )
+    setSelectedCategories((prev) => prev.includes(id) ? [] : [id])
   }
 
   function resetMapPosition() {
