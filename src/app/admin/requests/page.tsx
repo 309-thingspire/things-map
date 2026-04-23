@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import type { StoreRequest } from '@/types'
 
 const STATUS_LABELS: Record<string, string> = { PENDING: '대기', APPROVED: '승인', REJECTED: '반려' }
@@ -14,12 +15,31 @@ const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive'> =
   REJECTED: 'destructive',
 }
 
+interface Toast { type: 'success' | 'error' | 'warning'; message: string }
+
+function ToastBar({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 5000)
+    return () => clearTimeout(t)
+  }, [onDismiss])
+  const colors = { success: 'bg-emerald-500', error: 'bg-red-500', warning: 'bg-amber-500' }
+  const Icon = toast.type === 'success' ? CheckCircle : XCircle
+  return (
+    <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-sm font-medium text-white ${colors[toast.type]}`}>
+      <Icon size={16} />
+      {toast.message}
+    </div>
+  )
+}
+
 export default function AdminRequestsPage() {
   const [requests, setRequests] = useState<StoreRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [processing, setProcessing] = useState(false)
   const [selectedReq, setSelectedReq] = useState<StoreRequest | null>(null)
   const [adminNote, setAdminNote] = useState('')
   const [activeTab, setActiveTab] = useState('ALL')
+  const [toast, setToast] = useState<Toast | null>(null)
 
   async function fetchRequests(status?: string) {
     const url = status && status !== 'ALL' ? `/api/requests?status=${status}` : '/api/requests'
@@ -35,13 +55,36 @@ export default function AdminRequestsPage() {
 
   async function handleProcess(status: 'APPROVED' | 'REJECTED') {
     if (!selectedReq) return
-    await fetch(`/api/requests/${selectedReq.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, adminNote }),
-    })
-    setSelectedReq(null)
-    fetchRequests(activeTab)
+    setProcessing(true)
+    try {
+      const res = await fetch(`/api/requests/${selectedReq.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, adminNote }),
+      })
+      const json = await res.json()
+
+      if (!res.ok) {
+        setToast({ type: 'error', message: json.error ?? '처리 중 오류가 발생했습니다.' })
+        return
+      }
+
+      if (status === 'APPROVED') {
+        if (json.warning) {
+          setToast({ type: 'warning', message: json.warning })
+        } else if (json.store) {
+          const via = json.autoCollected ? '(네이버 자동 수집)' : ''
+          setToast({ type: 'success', message: `"${json.store.name}" 매장 등록 완료 ${via}` })
+        }
+      } else {
+        setToast({ type: 'success', message: '반려 처리되었습니다.' })
+      }
+
+      setSelectedReq(null)
+      fetchRequests(activeTab)
+    } finally {
+      setProcessing(false)
+    }
   }
 
   function handleTabChange(tab: string) {
@@ -53,6 +96,8 @@ export default function AdminRequestsPage() {
 
   return (
     <div>
+      {toast && <ToastBar toast={toast} onDismiss={() => setToast(null)} />}
+
       <h1 className="text-2xl font-bold text-gray-900 mb-6">등록 요청 관리</h1>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -110,6 +155,10 @@ export default function AdminRequestsPage() {
           </SheetHeader>
           {selectedReq && (
             <div className="mt-4 space-y-4">
+              <div className="bg-blue-50 rounded-lg p-3 text-xs text-blue-700">
+                승인 시 네이버 검색으로 좌표·주소·전화번호·URL을 자동 수집하여 매장을 등록합니다.
+              </div>
+
               <div>
                 <p className="text-xs text-gray-400 mb-1">요청 데이터</p>
                 <pre className="bg-gray-50 rounded-lg p-3 text-xs overflow-auto max-h-60">
@@ -130,8 +179,13 @@ export default function AdminRequestsPage() {
 
               {selectedReq.status === 'PENDING' && (
                 <div className="flex gap-2">
-                  <Button className="flex-1" onClick={() => handleProcess('APPROVED')}>승인</Button>
-                  <Button variant="destructive" className="flex-1" onClick={() => handleProcess('REJECTED')}>반려</Button>
+                  <Button className="flex-1" onClick={() => handleProcess('APPROVED')} disabled={processing}>
+                    {processing ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                    승인 및 자동 등록
+                  </Button>
+                  <Button variant="destructive" className="flex-1" onClick={() => handleProcess('REJECTED')} disabled={processing}>
+                    반려
+                  </Button>
                 </div>
               )}
             </div>
