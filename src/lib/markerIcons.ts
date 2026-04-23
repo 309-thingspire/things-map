@@ -118,6 +118,12 @@ const ICON_NODES: Record<string, SvgNode[]> = {
   ],
 }
 
+// fill 기반 커스텀 SVG (파일에서 추출한 path d 값)
+const FILL_ICON_PATHS: Record<string, string> = {
+  'ancient-gate': 'M18.901 10C19.296 10.6856 19.946 11.1872 20.7093 11.3957C21.4726 11.6042 22.2873 11.5026 22.976 11.113C23.057 11.8366 22.9102 12.5675 22.5562 13.2039C22.2022 13.8402 21.6586 14.3502 21.001 14.663L21 21H14V19C14.0001 18.4954 13.8096 18.0094 13.4665 17.6395C13.1234 17.2695 12.6531 17.0428 12.15 17.005L12 17C11.4954 16.9998 11.0094 17.1904 10.6394 17.5335C10.2695 17.8766 10.0428 18.3468 10.005 18.85L9.99998 19V21H2.99998V14.664C2.34113 14.3517 1.79626 13.8414 1.44147 13.2044C1.08667 12.5675 0.939669 11.8356 1.02098 11.111C1.70962 11.5014 2.52466 11.6036 3.28839 11.3955C4.05212 11.1874 4.70259 10.6858 5.09798 10H18.901ZM17.93 12H6.06898L5.99298 12.079C5.56198 12.499 5.05798 12.839 4.50698 13.081L4.41098 13.12L4.99998 13.4L4.99898 19L8.00098 18.999V18.927L8.01098 18.704C8.15998 16.688 9.79098 15.105 11.865 15.006L12.073 15.001L12.296 15.011C13.2681 15.0831 14.1804 15.5077 14.8616 16.2051C15.5427 16.9024 15.9457 17.8245 15.995 18.798L15.999 18.999L19 19L19.001 13.4L19.588 13.12L19.493 13.08C18.9414 12.8385 18.438 12.4994 18.007 12.079L17.93 12ZM17.036 3C17.1075 3.4961 17.2848 3.97105 17.5557 4.39272C17.8267 4.81438 18.1851 5.17293 18.6066 5.4441C19.0282 5.71527 19.5031 5.89273 19.9991 5.96448C20.4952 6.03624 21.0009 6.00061 21.482 5.86C21.3964 6.68858 21.018 7.45945 20.415 8.03408C19.8119 8.60872 19.0237 8.94943 18.192 8.995L18 9H5.99998C5.13396 9.00014 4.29863 8.6792 3.65549 8.09923C3.01234 7.51925 2.60706 6.72143 2.51798 5.86C2.99909 6.00061 3.50478 6.03624 4.00085 5.96448C4.49691 5.89273 4.97178 5.71527 5.39332 5.4441C5.81487 5.17293 6.17325 4.81438 6.44423 4.39272C6.71521 3.97105 6.89245 3.4961 6.96398 3H17.036ZM15.6 5H8.39898C8.0387 5.70545 7.53047 6.32487 6.90898 6.816L6.66098 7H17.338L17.326 6.992C16.6828 6.53728 16.1444 5.95012 15.747 5.27L15.6 5Z',
+  'ancient-pavilion': 'M12.513 2.00098C13.2191 3.9961 14.6055 5.67872 16.4287 6.75344C18.2519 7.82817 20.3955 8.22631 22.483 7.87798C22.4028 8.82939 22.0221 9.73066 21.396 10.4515C20.7699 11.1723 19.9308 11.6754 19 11.888V19L21 19.001V21.001H2.99999V19.001H4.99999V11.888C4.06913 11.6753 3.22996 11.1722 2.60371 10.4514C1.97746 9.73064 1.59655 8.82942 1.51599 7.87798C3.60371 8.22688 5.74761 7.82913 7.57123 6.75456C9.39485 5.67999 10.7816 3.9973 11.488 2.00198H12.513V2.00098ZM17 12H6.99999V19H17V12ZM12 5.32698L11.89 5.48198C10.3145 7.64048 8.00783 9.15243 5.39999 9.73598L5.04199 9.80898L5.71499 9.99898H18.288L18.956 9.80898L18.945 9.80698C16.1999 9.2847 13.7561 7.73821 12.109 5.48098L12 5.32598V5.32698Z',
+}
+
 function buildSvgContent(nodes: SvgNode[]): string {
   return nodes.map(([tag, attrs]) => {
     const attrStr = Object.entries(attrs)
@@ -128,18 +134,27 @@ function buildSvgContent(nodes: SvgNode[]): string {
 }
 
 export function getMarkerSvgHtml(iconName: string, color: string, size = 36): string {
+  const inner = Math.round(size * 0.5)
+  const circle = `width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;cursor:pointer;`
+
+  const fillPath = FILL_ICON_PATHS[iconName]
+  if (fillPath) {
+    return `<div style="${circle}"><svg viewBox="0 0 24 24" width="${inner}" height="${inner}"><path d="${fillPath}" fill="white"/></svg></div>`
+  }
+
   const nodes = ICON_NODES[iconName]
   const svgContent = nodes ? buildSvgContent(nodes) : ''
-
-  return `<div style="width:${size}px;height:${size}px;background:${color};border-radius:50%;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 6px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;cursor:pointer;">
-    <svg viewBox="0 0 24 24" width="${Math.round(size * 0.5)}" height="${Math.round(size * 0.5)}" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg>
-  </div>`
+  return `<div style="${circle}"><svg viewBox="0 0 24 24" width="${inner}" height="${inner}" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgContent}</svg></div>`
 }
 
 export function getIconSvgHtml(iconName: string, color: string, size = 18): string {
+  const fillPath = FILL_ICON_PATHS[iconName]
+  if (fillPath) {
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="display:block"><path d="${fillPath}" fill="${color}"/></svg>`
+  }
   const nodes = ICON_NODES[iconName]
   if (!nodes) return ''
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:block">${buildSvgContent(nodes)}</svg>`
 }
 
-export const AVAILABLE_ICONS = Object.keys(ICON_NODES)
+export const AVAILABLE_ICONS = [...Object.keys(ICON_NODES), ...Object.keys(FILL_ICON_PATHS)]

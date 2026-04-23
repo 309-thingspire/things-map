@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { ViewModeProvider, useViewMode } from '@/contexts/ViewModeContext'
 import { Map, List, ClipboardList, X, LayoutDashboard } from 'lucide-react'
 import RequestModal from '@/components/store/RequestModal'
+import LoginPromptModal from '@/components/store/LoginPromptModal'
 import type { ReactNode } from 'react'
 
 function getAvatarColor(name: string): string {
@@ -24,6 +25,7 @@ function NavContent() {
   const { viewMode, setViewMode } = useViewMode()
   const [profileOpen, setProfileOpen] = useState(false)
   const [requestOpen, setRequestOpen] = useState(false)
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -44,9 +46,9 @@ function NavContent() {
   return (
     <nav className="flex items-center gap-2">
       {/* 버튼 그룹: 지도/목록 + 등록요청 */}
-      {!loading && user && (
+      {!loading && (
         <div className={`${pillCls} px-1 gap-0.5`}>
-          {isMapPage && (
+          {isMapPage && user && (
             viewMode === 'map' ? (
               <button onClick={() => setViewMode('list')} className={iconBtnCls} title="목록">
                 <List size={17} />
@@ -57,7 +59,11 @@ function NavContent() {
               </button>
             )
           )}
-          <button onClick={() => setRequestOpen(true)} className={iconBtnCls} title="매장 등록 요청">
+          <button
+            onClick={() => user ? setRequestOpen(true) : setLoginPromptOpen(true)}
+            className={iconBtnCls}
+            title="매장 등록 요청"
+          >
             <ClipboardList size={17} />
           </button>
           {isListMode && (

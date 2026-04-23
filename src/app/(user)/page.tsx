@@ -83,6 +83,18 @@ export default function HomePage() {
       .catch(() => {})
   }, [])
 
+  // 페이지 방문 기록 (비로그인 포함)
+  useEffect(() => {
+    const key = 'tm_sid'
+    let sid = localStorage.getItem(key)
+    if (!sid) { sid = crypto.randomUUID(); localStorage.setItem(key, sid) }
+    const lastKey = `tm_visit_${new Date().toDateString()}`
+    if (!sessionStorage.getItem(lastKey)) {
+      sessionStorage.setItem(lastKey, '1')
+      fetch('/api/track/visit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sid }) }).catch(() => {})
+    }
+  }, [])
+
   useEffect(() => {
     if (!selectedStore || !cardScrollRef.current) return
     const container = cardScrollRef.current

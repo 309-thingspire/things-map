@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Badge } from '@/components/ui/badge'
 import RatingDisplay from '@/components/store/RatingDisplay'
 import ReviewForm from '@/components/store/ReviewForm'
+import LoginPromptModal from '@/components/store/LoginPromptModal'
 import { useAuth } from '@/hooks/useAuth'
 import type { StoreDetail, StoreListItem, Review } from '@/types'
 import { OFFICE } from '@/lib/office'
@@ -23,6 +24,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
   const [recommendations, setRecommendations] = useState<StoreListItem[]>([])
   const [loading, setLoading] = useState(false)
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
+  const [loginPromptOpen, setLoginPromptOpen] = useState(false)
   const [open, setOpen] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -167,15 +169,15 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-gray-900">평점 및 리뷰</h3>
+                  <button
+                    onClick={() => user ? setReviewDialogOpen(true) : setLoginPromptOpen(true)}
+                    className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="리뷰 작성"
+                  >
+                    <PenLine size={16} />
+                  </button>
                   {user && (
                     <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
-                      <button
-                        onClick={() => setReviewDialogOpen(true)}
-                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="리뷰 작성"
-                      >
-                        <PenLine size={16} />
-                      </button>
                       <DialogContent>
                         <DialogHeader>
                           <DialogTitle>리뷰 작성 — {store.name}</DialogTitle>
@@ -186,6 +188,12 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect }: Prop
                         />
                       </DialogContent>
                     </Dialog>
+                  )}
+                  {loginPromptOpen && (
+                    <LoginPromptModal
+                      onClose={() => setLoginPromptOpen(false)}
+                      message="리뷰 작성은 로그인 후 이용할 수 있습니다."
+                    />
                   )}
                 </div>
                 {store.internalRating ? (

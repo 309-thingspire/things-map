@@ -21,6 +21,7 @@ interface UserStat {
 interface Stats {
   summary: { storeCount: number; userCount: number; pendingRequests: number }
   dau: number; mau: number
+  visitors: { today: number; todayAnon: number; month: number }
   dauTrend: DauPoint[]
   popularStores: PopularStore[]
   userStats: UserStat[]
@@ -60,7 +61,7 @@ export default function AdminDashboard() {
     return <div className="text-gray-400 p-4">불러오는 중...</div>
   }
 
-  const { summary, dau, mau, dauTrend, popularStores, userStats } = stats
+  const { summary, dau, mau, visitors, dauTrend, popularStores, userStats } = stats
   const maxDau = Math.max(...dauTrend.map(d => d.count), 1)
 
   const sortedUsers = [...userStats].sort((a, b) => {
@@ -113,12 +114,12 @@ export default function AdminDashboard() {
         <div className="bg-white rounded-xl shadow-sm border p-5 flex flex-col justify-between">
           <p className="text-sm font-medium text-gray-500">DAU (오늘)</p>
           <p className="text-4xl font-bold text-gray-900 mt-1">{dau}</p>
-          <p className="text-xs text-gray-400 mt-1">오늘 로그인한 고유 사용자</p>
+          <p className="text-xs text-gray-400 mt-1">로그인 {dau}명 · 비로그인 {visitors.todayAnon}명</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border p-5 flex flex-col justify-between">
-          <p className="text-sm font-medium text-gray-500">MAU (이번 달)</p>
-          <p className="text-4xl font-bold text-gray-900 mt-1">{mau}</p>
-          <p className="text-xs text-gray-400 mt-1">이번 달 로그인한 고유 사용자</p>
+          <p className="text-sm font-medium text-gray-500">방문자 (오늘 / 이번 달)</p>
+          <p className="text-4xl font-bold text-gray-900 mt-1">{visitors.today}</p>
+          <p className="text-xs text-gray-400 mt-1">이번 달 누적 {visitors.month}명 방문</p>
         </div>
         <div className="bg-white rounded-xl shadow-sm border p-5">
           <p className="text-sm font-medium text-gray-500 mb-3">최근 7일 DAU</p>

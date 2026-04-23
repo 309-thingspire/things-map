@@ -20,6 +20,7 @@ export async function GET() {
     storeCount, userCount, pendingRequests,
     dauLogins, mauLogins, recentLogins,
     topViewGroups, users,
+    todayVisits, monthVisits,
   ] = await Promise.all([
     prisma.store.count({ where: { status: 'ACTIVE' } }),
     prisma.user.count({ where: { isActive: true } }),
@@ -51,6 +52,12 @@ export async function GET() {
       orderBy: { _count: { storeId: 'desc' } },
       take: 10,
     }),
+
+    // 오늘 방문자 (고유 sessionId)
+    prisma.pageVisit.groupBy({ by: ['sessionId'], where: { createdAt: { gte: todayStart } } }),
+
+    // 이번 달 방문자
+    prisma.pageVisit.groupBy({ by: ['sessionId'], where: { createdAt: { gte: monthStart } } }),
 
     // 계정별 통계
     prisma.user.findMany({
@@ -115,11 +122,16 @@ export async function GET() {
     ]
   }
 
+  // 오늘 방문자 중 비로그인 비율
+  const todayLoggedIn = new Set(dauLogins.map(l => l.userId)).size
+  const todayAnon = todayVisits.length - todayLoggedIn
+
   return NextResponse.json({
     data: {
       summary: { storeCount, userCount, pendingRequests },
       dau: dauLogins.length,
       mau: mauLogins.length,
+      visitors: { today: todayVisits.length, todayAnon: Math.max(0, todayAnon), month: monthVisits.length },
       dauTrend,
       popularStores,
       userStats: users.map((u) => ({

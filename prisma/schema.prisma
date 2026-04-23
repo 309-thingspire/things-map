@@ -261,6 +261,20 @@ enum JobStatus {
 }
 
 // ────────────────────────────────────────
+// 페이지 방문 (비로그인 포함)
+// ────────────────────────────────────────
+model PageVisit {
+  id        String   @id @default(cuid())
+  sessionId String   @map("session_id") // 브라우저 localStorage UUID
+  userId    String?  @map("user_id")    // 로그인 시 채움
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@map("page_visits")
+}
+
+// ────────────────────────────────────────
 // 로그인 이력 (DAU/MAU 추적)
 // ────────────────────────────────────────
 model UserLogin {

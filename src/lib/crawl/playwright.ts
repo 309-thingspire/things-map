@@ -44,7 +44,13 @@ export async function crawlByStoreName(storeName: string): Promise<PlaywrightRes
     const category = await firstResult.locator('.category').textContent().catch(() => null)
     const kakaoUrl = (await firstResult.locator('.head_item .link_name').getAttribute('href')) ?? ''
 
-    await firstResult.locator('.head_item .link_name').click()
+    // DimmedLayer(쿠키/팝업 오버레이)가 클릭을 가로막는 경우 제거
+    await page.evaluate(() => {
+      const layer = document.getElementById('dimmedLayer')
+      if (layer) (layer as HTMLElement).style.display = 'none'
+    }).catch(() => {})
+
+    await firstResult.locator('.head_item .link_name').click({ force: true })
     await randomDelay()
 
     // 영업시간
