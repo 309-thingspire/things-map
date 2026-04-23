@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { Trash2, ScanSearch, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +26,8 @@ export default function AdminStoresPage() {
   const [csvLoading, setCsvLoading] = useState(false)
   const [importResult, setImportResult] = useState<{ success: string[]; failed: string[] } | null>(null)
   const csvInputRef = useRef<HTMLInputElement>(null)
+  const [crawling, setCrawling] = useState(false)
+  const [crawlResult, setCrawlResult] = useState<{ success: number; failed: number } | null>(null)
 
   async function fetchStores() {
     const res = await fetch('/api/stores?limit=200')
@@ -126,6 +128,27 @@ export default function AdminStoresPage() {
     }
   }
 
+  async function handleCrawlAll() {
+    if (!confirm(`전체 ${stores.length}개 매장의 메뉴/영업시간을 카카오맵에서 수집합니다.\n로컬 환경에서만 동작합니다. 계속하시겠습니까?`)) return
+    setCrawling(true)
+    setCrawlResult(null)
+    try {
+      const res = await fetch('/api/crawl/menus', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      if (res.ok) {
+        const { data } = await res.json()
+        setCrawlResult({ success: data.success, failed: data.failed })
+        fetchStores()
+      } else {
+        const json = await res.json()
+        alert(json.error ?? '크롤링 실패 (Playwright가 설치된 로컬 환경에서만 동작합니다)')
+      }
+    } catch {
+      alert('크롤링 실패 (Playwright가 설치된 로컬 환경에서만 동작합니다)')
+    } finally {
+      setCrawling(false)
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('삭제하시겠습니까?')) return
     await fetch(`/api/stores/${id}`, { method: 'DELETE' })
@@ -177,9 +200,22 @@ export default function AdminStoresPage() {
             {csvLoading ? '가져오는 중...' : '📥 CSV 가져오기'}
           </Button>
           <Button variant="outline" onClick={handleExportCsv}>📤 CSV 내보내기</Button>
+          <Button variant="outline" onClick={handleCrawlAll} disabled={crawling} className="gap-1.5">
+            {crawling ? <Loader2 size={14} className="animate-spin" /> : <ScanSearch size={14} />}
+            {crawling ? '수집 중...' : '메뉴 크롤링'}
+          </Button>
           <Button onClick={openCreate}>+ 매장 추가</Button>
         </div>
       </div>
+
+      {crawlResult && (
+        <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm flex items-center gap-2">
+          <CheckCircle size={15} className="text-blue-500 shrink-0" />
+          <span className="text-blue-800 font-medium">크롤링 완료 — 성공 {crawlResult.success}개</span>
+          {crawlResult.failed > 0 && <span className="text-red-500 flex items-center gap-1"><XCircle size={13} /> 실패 {crawlResult.failed}개</span>}
+          <button onClick={() => setCrawlResult(null)} className="ml-auto text-blue-400 hover:text-blue-600 text-xs">닫기</button>
+        </div>
+      )}
 
       {importResult && (
         <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl text-sm">
