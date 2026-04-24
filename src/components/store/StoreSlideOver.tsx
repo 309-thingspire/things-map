@@ -35,6 +35,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
   const [isDesktop, setIsDesktop] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
   const [favoriteCount, setFavoriteCount] = useState(0)
+  const [tmapWalking, setTmapWalking] = useState<{ distanceM: number; walkingMinutes: number } | null>(null)
 
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -91,6 +92,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
     setRecommendations([])
     setIsFavorited(false)
     setFavoriteCount(0)
+    setTmapWalking(null)
 
     Promise.all([
       fetch(`/api/stores/${storeId}`).then((r) => r.ok ? r.json() : null),
@@ -101,6 +103,13 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
       setIsFavorited(loadedStore?.isFavorited ?? false)
       setFavoriteCount(loadedStore?.favoriteCount ?? 0)
       setReviews(reviewsJson?.data.reviews ?? [])
+
+      if (loadedStore?.lat && loadedStore?.lng) {
+        fetch(`/api/tmap/walking?goalLat=${loadedStore.lat}&goalLng=${loadedStore.lng}`)
+          .then((r) => r.ok ? r.json() : null)
+          .then((j) => { if (j?.walkingMinutes) setTmapWalking({ distanceM: j.distanceM, walkingMinutes: j.walkingMinutes }) })
+          .catch(() => {})
+      }
 
       if (loadedStore?.category?.id) {
         const recRes = await fetch(
@@ -282,9 +291,15 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                   <h2 className="text-xl font-bold text-gray-900 truncate">{store.name}</h2>
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{store.address}</p>
-                {store.walkingMinutes != null && (
-                  <p className="text-sm text-[#38c68b] mt-1">🏢 본사로부터 {store.walkingMinutes}분</p>
-                )}
+                {(tmapWalking ?? (store.walkingMinutes != null ? { distanceM: store.officeDistanceM ?? 0, walkingMinutes: store.walkingMinutes } : null)) != null && (() => {
+                  const w = tmapWalking ?? { distanceM: store.officeDistanceM ?? 0, walkingMinutes: store.walkingMinutes! }
+                  return (
+                    <p className="text-sm text-[#38c68b] mt-1">
+                      🚶 본사로부터 {w.walkingMinutes}분
+                      {w.distanceM > 0 && <span className="text-gray-400 text-xs ml-1">({w.distanceM}m{tmapWalking ? ' · TMAP' : ''})</span>}
+                    </p>
+                  )
+                })()}
                 {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
                 {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
 
