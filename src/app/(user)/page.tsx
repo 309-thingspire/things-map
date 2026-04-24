@@ -84,6 +84,15 @@ export default function HomePage() {
   const [hasMyFavorites, setHasMyFavorites] = useState(false)
   const cardScrollRef = useRef<HTMLDivElement>(null)
   const { center, zoom, moveTo } = useMap()
+  const zoomRef = useRef(zoom)
+  useEffect(() => { zoomRef.current = zoom })
+  const [showCompassBtn, setShowCompassBtn] = useState(false)
+  useEffect(() => {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof (DeviceOrientationEvent as unknown as { requestPermission?: unknown }).requestPermission === 'function') {
+      setShowCompassBtn(true)
+    }
+  }, [])
   const selectedStoreId = selectedStore?.id ?? null
 
   const { stores, total, loading } = useStores({
@@ -137,14 +146,25 @@ export default function HomePage() {
     function handler(e: Event) {
       const storeId = (e as CustomEvent<{ storeId: string }>).detail.storeId
       const store = stores.find((s) => s.id === storeId)
-      if (store) setSelectedStore(store)
+      if (store) {
+        setSelectedStore(store)
+        moveTo(store.lat, store.lng, zoomRef.current)
+      }
     }
     window.addEventListener('ddingbot:selectStore', handler)
     return () => window.removeEventListener('ddingbot:selectStore', handler)
-  }, [stores])
+  }, [stores, moveTo])
 
   function handleStoreSelect(store: StoreListItem) {
     setSelectedStore(store)
+    moveTo(store.lat, store.lng, zoomRef.current)
+  }
+
+  async function requestCompassPermission() {
+    try {
+      const perm = await (DeviceOrientationEvent as unknown as { requestPermission: () => Promise<string> }).requestPermission()
+      if (perm === 'granted') setShowCompassBtn(false)
+    } catch { setShowCompassBtn(false) }
   }
 
   function toggleCategory(id: string) {
@@ -180,9 +200,9 @@ export default function HomePage() {
       {viewMode === 'map' && (
         /* Bottom overlay */
         <div className="absolute bottom-0 left-0 right-0 z-10 pointer-events-none">
-          {/* 위치 초기화 버튼 — 지도 이동/확대축소 시만 표시 */}
-          {mapMoved && (
-            <div className="flex justify-center pb-2 pointer-events-auto">
+          {/* 위치 초기화 / 나침반 버튼 */}
+          <div className="flex justify-center gap-2 pb-2 pointer-events-auto">
+            {mapMoved && (
               <button
                 onClick={resetMapPosition}
                 className="flex items-center gap-1.5 bg-white/95 backdrop-blur-sm text-gray-700 text-xs font-medium px-4 py-2 rounded-full shadow-md border border-gray-200 hover:shadow-lg transition-all"
@@ -190,8 +210,16 @@ export default function HomePage() {
                 <LocateFixed size={13} />
                 위치 초기화
               </button>
-            </div>
-          )}
+            )}
+            {showCompassBtn && (
+              <button
+                onClick={requestCompassPermission}
+                className="flex items-center gap-1.5 bg-white/95 backdrop-blur-sm text-gray-700 text-xs font-medium px-4 py-2 rounded-full shadow-md border border-gray-200 hover:shadow-lg transition-all"
+              >
+                🧭 방위 켜기
+              </button>
+            )}
+          </div>
 
           {/* 카테고리 필터 */}
           <div className="flex gap-2 px-4 overflow-x-auto pointer-events-auto" style={{ scrollbarWidth: 'none' }}>

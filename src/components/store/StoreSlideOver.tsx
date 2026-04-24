@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { X, PenLine, Heart } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
@@ -37,9 +37,21 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
   const [loginPromptOpen, setLoginPromptOpen] = useState(false)
   const [open, setOpen] = useState(false)
+  const [snapPoint, setSnapPoint] = useState<'partial' | 'full'>('partial')
+  const [isDesktop, setIsDesktop] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
   const [favoriteCount, setFavoriteCount] = useState(0)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStartY = useRef<number | null>(null)
+  const touchSnap = useRef<'partial' | 'full'>('partial')
+
+  useLayoutEffect(() => {
+    const mq = window.matchMedia('(min-width: 640px)')
+    setIsDesktop(mq.matches)
+    const h = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', h)
+    return () => mq.removeEventListener('change', h)
+  }, [])
 
   useEffect(() => {
     if (!storeId) {
@@ -48,6 +60,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
     }
 
     setOpen(true)
+    setSnapPoint('partial')
     setLoading(true)
     setStore(null)
     setReviews([])
@@ -96,7 +109,28 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
     closeTimerRef.current = setTimeout(onClose, 300)
   }
 
+  function onHandleTouchStart(e: React.TouchEvent) {
+    touchStartY.current = e.touches[0].clientY
+    touchSnap.current = snapPoint
+  }
+
+  function onHandleTouchEnd(e: React.TouchEvent) {
+    if (touchStartY.current === null) return
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current
+    touchStartY.current = null
+    if (deltaY < -50 && touchSnap.current === 'partial') {
+      setSnapPoint('full')
+    } else if (deltaY > 50) {
+      if (touchSnap.current === 'full') setSnapPoint('partial')
+      else handleClose()
+    }
+  }
+
   if (!storeId && !open) return null
+
+  // 모바일: inline style로 snap 제어 / 데스크탑: Tailwind sm: 클래스
+  const mobileY = !open ? '100%' : snapPoint === 'full' ? '0%' : '62%'
+  const panelStyle = isDesktop ? undefined : { transform: `translateY(${mobileY})` }
 
   return (
     <>
@@ -113,14 +147,25 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
           transition-transform duration-300
           inset-x-0 bottom-0 top-14 rounded-t-2xl border-t border-gray-200
           sm:inset-x-auto sm:right-3 sm:top-3 sm:bottom-3 sm:w-full sm:max-w-[440px] sm:rounded-2xl sm:border
-          ${open
-            ? 'translate-y-0 sm:translate-y-0 sm:translate-x-0'
-            : 'translate-y-full sm:translate-y-0 sm:translate-x-[calc(100%+12px)]'
-          }
+          ${open ? 'sm:translate-x-0' : 'sm:translate-x-[calc(100%+12px)]'}
         `}
+        style={panelStyle}
       >
+        {/* 드래그 핸들 (모바일 전용) */}
+        <div
+          className="sm:hidden flex justify-center pt-3 pb-1 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+          onTouchStart={onHandleTouchStart}
+          onTouchEnd={onHandleTouchEnd}
+        >
+          <div className="w-10 h-1 rounded-full bg-gray-300" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+        <div
+          className="flex items-center justify-between px-5 py-3 border-b shrink-0 sm:py-4"
+          onTouchStart={onHandleTouchStart}
+          onTouchEnd={onHandleTouchEnd}
+        >
           <div className="flex items-center gap-1.5 min-w-0 pr-2">
             {favoriteCount >= 5 && (
               <span className="shrink-0" dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 16) }} />
@@ -287,11 +332,11 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
 
         {/* 추천 매장 — 하단 고정 */}
         {recommendations.length > 0 && (
-          <div className="shrink-0 border-t border-gray-100 px-5 py-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          <div className="shrink-0 border-t border-gray-100 py-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 px-5">
               {store?.category?.name ?? '같은 카테고리'} 추천
             </h3>
-            <div className="flex gap-3 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+            <div className="flex gap-3 overflow-x-auto pb-1 pl-5" style={{ scrollbarWidth: 'none' }}>
               {recommendations.map((rec) => (
                 <button
                   key={rec.id}
@@ -308,6 +353,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                   )}
                 </button>
               ))}
+              <div className="shrink-0 w-5" />
             </div>
           </div>
         )}
