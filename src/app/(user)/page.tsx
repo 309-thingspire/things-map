@@ -85,8 +85,8 @@ export default function HomePage() {
   const [hasUncategorizedStores, setHasUncategorizedStores] = useState(false)
   const cardScrollRef = useRef<HTMLDivElement>(null)
   const { center, zoom, moveTo } = useMap()
-  const zoomRef = useRef(zoom)
-  useEffect(() => { zoomRef.current = zoom })
+  // mapCenter drives NaverMap display only — separate from center which drives useStores fetch
+  const [mapCenter, setMapCenter] = useState(center)
   useEffect(() => {
     type DOEI = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> }
     if (typeof (DeviceOrientationEvent as DOEI).requestPermission !== 'function') return
@@ -155,7 +155,7 @@ export default function HomePage() {
       const store = stores.find((s) => s.id === storeId)
       if (store) {
         setSelectedStore(store)
-        moveTo(store.lat, store.lng, zoomRef.current)
+        setMapCenter({ lat: store.lat, lng: store.lng })
       }
     }
     window.addEventListener('ddingbot:selectStore', handler)
@@ -164,7 +164,7 @@ export default function HomePage() {
 
   function handleStoreSelect(store: StoreListItem) {
     setSelectedStore(store)
-    moveTo(store.lat, store.lng, zoomRef.current)
+    setMapCenter({ lat: store.lat, lng: store.lng })
   }
 
   function toggleCategory(id: string) {
@@ -173,6 +173,7 @@ export default function HomePage() {
 
   function resetMapPosition() {
     moveTo(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, DEFAULT_ZOOM)
+    setMapCenter(DEFAULT_CENTER)
     setMapMoved(false)
   }
 
@@ -182,7 +183,7 @@ export default function HomePage() {
       <div className="absolute inset-0 z-0">
         <NaverMap
           stores={stores}
-          center={center}
+          center={mapCenter}
           zoom={zoom}
           selectedStore={selectedStore}
           onStoreSelect={handleStoreSelect}
@@ -417,7 +418,7 @@ export default function HomePage() {
         onStoreSelect={(store) => {
           setDetailStoreId(store.id)
           setSelectedStore(store)
-          moveTo(store.lat, store.lng, 17)
+          setMapCenter({ lat: store.lat, lng: store.lng })
         }}
         onFavoriteChange={(isFavorited) => {
           if (isFavorited) setHasMyFavorites(true)
