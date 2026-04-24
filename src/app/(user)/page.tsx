@@ -57,16 +57,23 @@ function HorizontalStoreCard({ store, selected, onClick }: { store: StoreListIte
       }`}
     >
       <CategoryBadge category={store.category} />
-      <div className="flex items-center gap-1">
-        {(store.favoriteCount ?? 0) >= 5 && <AwardBadge />}
-        <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{store.name}</p>
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex items-center gap-1 min-w-0">
+          {(store.favoriteCount ?? 0) >= 5 && <AwardBadge />}
+          <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{store.name}</p>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0 text-[11px]">
+          <span className={store.internalRating ? 'text-amber-500' : 'text-gray-300'}>
+            ★ {store.internalRating ? store.internalRating.avgTotal.toFixed(1) : '0.0'}
+          </span>
+          {(store.favoriteCount ?? 0) > 0 && (
+            <span className="text-gray-400">❤ {store.favoriteCount}</span>
+          )}
+        </div>
       </div>
       {store.walkingMinutes != null && (
-        <p className="text-[11px] text-blue-500 mt-1">🏢 {store.walkingMinutes}분</p>
+        <p className="text-[11px] text-blue-500 mt-1">🏢 본사로부터 {store.walkingMinutes}분</p>
       )}
-      <p className={`text-[11px] mt-0.5 ${store.internalRating ? 'text-amber-500' : 'text-gray-300'}`}>
-        ★ {store.internalRating ? store.internalRating.avgTotal.toFixed(1) : '0.0'}
-      </p>
     </button>
   )
 }
