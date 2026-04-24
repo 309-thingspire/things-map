@@ -61,13 +61,12 @@ function HorizontalStoreCard({ store, selected, onClick }: { store: StoreListIte
         {(store.favoriteCount ?? 0) >= 5 && <AwardBadge />}
         <p className="text-sm font-semibold text-gray-900 truncate leading-tight">{store.name}</p>
       </div>
-      <p className="text-[11px] text-gray-400 truncate mt-0.5">{store.address}</p>
       {store.walkingMinutes != null && (
-        <p className="text-[11px] text-blue-500 mt-1">🏢 회사로부터 {store.walkingMinutes}분</p>
+        <p className="text-[11px] text-blue-500 mt-1">🏢 {store.walkingMinutes}분</p>
       )}
-      {store.internalRating && (
-        <p className="text-[11px] text-amber-500 mt-0.5">★ {store.internalRating.avgTotal.toFixed(1)}</p>
-      )}
+      <p className={`text-[11px] mt-0.5 ${store.internalRating ? 'text-amber-500' : 'text-gray-300'}`}>
+        ★ {store.internalRating ? store.internalRating.avgTotal.toFixed(1) : '0.0'}
+      </p>
     </button>
   )
 }
