@@ -142,8 +142,11 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!selectedStore || !cardScrollRef.current) return
-    const card = cardScrollRef.current.querySelector<HTMLElement>(`[data-store-id="${selectedStore.id}"]`)
-    card?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
+    const container = cardScrollRef.current
+    const card = container.querySelector<HTMLElement>(`[data-store-id="${selectedStore.id}"]`)
+    if (card) {
+      container.scrollTo({ left: card.offsetLeft - 16, behavior: 'smooth' })
+    }
   }, [selectedStore])
 
   useEffect(() => {
