@@ -76,6 +76,7 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
   const isProgrammaticRef = useRef(false)
   const selectedStoreRef = useRef(selectedStore)
   const prevSelectedIdRef = useRef<string | null>(null)
+  const polylineRef = useRef<NaverPolyline | null>(null)
 
   useEffect(() => { onStoreSelectRef.current = onStoreSelect })
   useEffect(() => { onDeselectRef.current = onDeselect })
@@ -119,6 +120,8 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
     window.naver.maps.Event.addListener(mapInstance.current, 'click', () => {
       activeInfoWindow.current?.close()
       activeInfoWindow.current = null
+      polylineRef.current?.setMap(null)
+      polylineRef.current = null
       if (prevSelectedIdRef.current) {
         const prevMarker = markersMap.current.get(prevSelectedIdRef.current)
         const prevData = markerDataMap.current.get(prevSelectedIdRef.current)
@@ -278,6 +281,10 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
       if (prevMarker && prevData) prevMarker.setIcon(buildIconStatic(prevData.cat, false))
     }
 
+    // Remove previous polyline
+    polylineRef.current?.setMap(null)
+    polylineRef.current = null
+
     if (!selectedStore) {
       activeInfoWindow.current?.close()
       prevSelectedIdRef.current = null
@@ -295,6 +302,24 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
       iw.open(mapInstance.current!, marker)
       activeInfoWindow.current = iw
     }
+
+    // TMAP 도보 경로
+    const map = mapInstance.current!
+    fetch(`/api/tmap/walking?goalLat=${selectedStore.lat}&goalLng=${selectedStore.lng}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((j: { path?: [number, number][] } | null) => {
+        if (!j?.path?.length || !window.naver?.maps) return
+        polylineRef.current?.setMap(null)
+        polylineRef.current = new window.naver.maps.Polyline({
+          path: j.path.map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng)),
+          strokeColor: '#3b82f6',
+          strokeWeight: 4,
+          strokeOpacity: 0.85,
+          strokeStyle: 'solid',
+          map,
+        })
+      })
+      .catch(() => {})
   }, [selectedStore]) // eslint-disable-line
 
   return <div ref={mapRef} className="w-full h-full" />

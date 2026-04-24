@@ -42,14 +42,20 @@ export async function GET(request: NextRequest) {
     if (!res.ok) throw new Error(`TMAP ${res.status}`)
 
     const data = await res.json()
-    const props = data?.features?.[0]?.properties
-    if (!props) throw new Error('응답 파싱 실패')
+    const features = data?.features
+    if (!features?.length) throw new Error('응답 파싱 실패')
 
+    const props = features[0]?.properties
     const distanceM: number = props.totalDistance
     const walkingSeconds: number = props.totalTime
     const walkingMinutes = Math.ceil(walkingSeconds / 60)
 
-    return NextResponse.json({ distanceM, walkingMinutes, walkingSeconds })
+    // Collect all LineString coordinates [lng, lat] → flatten into path
+    const path: [number, number][] = features
+      .filter((f: { geometry: { type: string } }) => f.geometry.type === 'LineString')
+      .flatMap((f: { geometry: { coordinates: [number, number][] } }) => f.geometry.coordinates)
+
+    return NextResponse.json({ distanceM, walkingMinutes, walkingSeconds, path })
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
