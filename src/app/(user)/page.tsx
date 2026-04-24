@@ -82,6 +82,7 @@ export default function HomePage() {
   const [mapMoved, setMapMoved] = useState(false)
   const [hasFeaturedStores, setHasFeaturedStores] = useState(false)
   const [hasMyFavorites, setHasMyFavorites] = useState(false)
+  const [hasUncategorizedStores, setHasUncategorizedStores] = useState(false)
   const cardScrollRef = useRef<HTMLDivElement>(null)
   const { center, zoom, moveTo } = useMap()
   const zoomRef = useRef(zoom)
@@ -105,9 +106,11 @@ export default function HomePage() {
     Promise.all([
       fetch('/api/categories').then((r) => r.json()),
       fetch('/api/stores?categories=__featured__&limit=1').then((r) => r.json()),
-    ]).then(([catJson, featJson]) => {
+      fetch('/api/stores?categories=__none__&limit=1').then((r) => r.json()),
+    ]).then(([catJson, featJson, noneJson]) => {
       setCategories(catJson.data?.categories ?? [])
       setHasFeaturedStores((featJson.data?.total ?? 0) > 0)
+      setHasUncategorizedStores((noneJson.data?.total ?? 0) > 0)
     }).catch(() => {})
   }, [])
 
@@ -133,13 +136,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!selectedStore || !cardScrollRef.current) return
-    const container = cardScrollRef.current
-    const card = container.querySelector<HTMLElement>(`[data-store-id="${selectedStore.id}"]`)
-    if (card) {
-      const containerRect = container.getBoundingClientRect()
-      const cardRect = card.getBoundingClientRect()
-      container.scrollTo({ left: container.scrollLeft + cardRect.left - containerRect.left - 16, behavior: 'smooth' })
-    }
+    const card = cardScrollRef.current.querySelector<HTMLElement>(`[data-store-id="${selectedStore.id}"]`)
+    card?.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
   }, [selectedStore])
 
   useEffect(() => {
@@ -278,17 +276,18 @@ export default function HomePage() {
                 </button>
               )
             })}
-            {/* 미분류 */}
-            <button
-              onClick={() => toggleCategory('__none__')}
-              className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm text-sm ${
-                selectedCategories.includes('__none__')
-                  ? 'bg-blue-500 text-white border-blue-500'
-                  : 'bg-white/80 text-gray-600 border-gray-200'
-              }`}
-            >
-              미분류
-            </button>
+            {hasUncategorizedStores && (
+              <button
+                onClick={() => toggleCategory('__none__')}
+                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors backdrop-blur-sm text-sm ${
+                  selectedCategories.includes('__none__')
+                    ? 'bg-blue-500 text-white border-blue-500'
+                    : 'bg-white/80 text-gray-600 border-gray-200'
+                }`}
+              >
+                미분류
+              </button>
+            )}
           </div>
 
           {/* 가로 스크롤 카드 */}
@@ -366,14 +365,16 @@ export default function HomePage() {
                   </button>
                 )
               })}
-              <button
-                onClick={() => toggleCategory('__none__')}
-                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors text-sm ${
-                  selectedCategories.includes('__none__') ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
-                }`}
-              >
-                미분류
-              </button>
+              {hasUncategorizedStores && (
+                <button
+                  onClick={() => toggleCategory('__none__')}
+                  className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors text-sm ${
+                    selectedCategories.includes('__none__') ? 'bg-blue-500 text-white border-blue-500' : 'text-gray-600 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  미분류
+                </button>
+              )}
             </div>
           </div>
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { X, PenLine, Heart } from 'lucide-react'
+import { X, PenLine, Heart, ExternalLink } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import RatingDisplay from '@/components/store/RatingDisplay'
@@ -12,14 +12,6 @@ import { getIconSvgHtml } from '@/lib/markerIcons'
 import type { StoreDetail, StoreListItem, Review } from '@/types'
 import { OFFICE } from '@/lib/office'
 
-function NaverIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
-      <rect width="20" height="20" rx="3" fill="#03C75A" />
-      <path d="M5 15V5h2.8l4.4 7V5H15v10h-2.8l-4.4-7v7H5z" fill="white" />
-    </svg>
-  )
-}
 
 interface Props {
   storeId: string | null
@@ -171,6 +163,17 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
               <span className="shrink-0" dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 16) }} />
             )}
             <span className="font-semibold text-gray-900 truncate">{store?.name ?? '불러오는 중...'}</span>
+            {store?.naverUrl && (
+              <a
+                href={store.naverUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-gray-400 hover:text-gray-600 transition-colors"
+                title="네이버 지도에서 보기"
+              >
+                <ExternalLink size={14} />
+              </a>
+            )}
           </div>
           <button onClick={handleClose} className="shrink-0 p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
             <X size={16} />
@@ -200,24 +203,11 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                   ))}
                 </div>
 
-                <div className="flex items-start justify-between gap-2 mt-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    {favoriteCount >= 5 && (
-                      <span className="shrink-0" dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 18) }} />
-                    )}
-                    <h2 className="text-xl font-bold text-gray-900 truncate">{store.name}</h2>
-                  </div>
-                  {store.naverUrl && (
-                    <a
-                      href={store.naverUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 p-1 text-green-500 hover:text-green-700 transition-colors"
-                      title="네이버 지도에서 보기"
-                    >
-                      <NaverIcon size={22} />
-                    </a>
+                <div className="flex items-center gap-2 min-w-0 mt-1">
+                  {favoriteCount >= 5 && (
+                    <span className="shrink-0" dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 18) }} />
                   )}
+                  <h2 className="text-xl font-bold text-gray-900 truncate">{store.name}</h2>
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{store.address}</p>
                 {store.walkingMinutes != null && (
