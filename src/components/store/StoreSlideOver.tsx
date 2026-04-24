@@ -12,13 +12,15 @@ import { getIconSvgHtml } from '@/lib/markerIcons'
 import type { StoreDetail, StoreListItem, Review } from '@/types'
 import { OFFICE } from '@/lib/office'
 
-
 interface Props {
   storeId: string | null
   onClose: () => void
   onStoreSelect?: (store: StoreListItem) => void
   onFavoriteChange?: (isFavorited: boolean) => void
 }
+
+const PARTIAL_VISIBLE_PX = 310  // height of content visible in partial snap
+const ANIM = 'transform 0.36s cubic-bezier(0.32,0.72,0,1)'
 
 export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavoriteChange }: Props) {
   const { user } = useAuth()
@@ -33,17 +35,46 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
   const [isDesktop, setIsDesktop] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
   const [favoriteCount, setFavoriteCount] = useState(0)
+
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const touchStartY = useRef<number | null>(null)
-  const touchSnap = useRef<'partial' | 'full'>('partial')
+  const panelRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ startY: number; startPx: number } | null>(null)
+  const snapRef = useRef<'partial' | 'full'>('partial')
+  const isDesktopRef = useRef(false)
 
   useLayoutEffect(() => {
     const mq = window.matchMedia('(min-width: 640px)')
+    isDesktopRef.current = mq.matches
     setIsDesktop(mq.matches)
-    const h = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    const h = (e: MediaQueryListEvent) => { isDesktopRef.current = e.matches; setIsDesktop(e.matches) }
     mq.addEventListener('change', h)
     return () => mq.removeEventListener('change', h)
   }, [])
+
+  function getPartialPx() {
+    const h = panelRef.current?.offsetHeight ?? window.innerHeight
+    return Math.max(0, h - PARTIAL_VISIBLE_PX)
+  }
+
+  function moveTo(px: number, animated: boolean) {
+    const el = panelRef.current
+    if (!el) return
+    el.style.transition = animated ? ANIM : 'none'
+    el.style.transform = `translateY(${px}px)`
+  }
+
+  // Entrance animation on each new storeId
+  useLayoutEffect(() => {
+    if (!storeId || isDesktopRef.current || !panelRef.current) return
+    const el = panelRef.current
+    el.style.transition = 'none'
+    el.style.transform = `translateY(${el.offsetHeight}px)`
+    requestAnimationFrame(() => {
+      el.style.transition = ANIM
+      el.style.transform = `translateY(${getPartialPx()}px)`
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeId])
 
   useEffect(() => {
     if (!storeId) {
@@ -53,6 +84,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
 
     setOpen(true)
     setSnapPoint('partial')
+    snapRef.current = 'partial'
     setLoading(true)
     setStore(null)
     setReviews([])
@@ -96,33 +128,69 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
   }
 
   function handleClose() {
+    if (panelRef.current && !isDesktopRef.current) {
+      moveTo(panelRef.current.offsetHeight, true)
+    }
     setOpen(false)
+    setSnapPoint('partial')
+    snapRef.current = 'partial'
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current)
-    closeTimerRef.current = setTimeout(onClose, 300)
+    closeTimerRef.current = setTimeout(onClose, 380)
   }
 
   function onHandleTouchStart(e: React.TouchEvent) {
-    touchStartY.current = e.touches[0].clientY
-    touchSnap.current = snapPoint
+    if (isDesktopRef.current) return
+    const startPx = snapRef.current === 'full' ? 0 : getPartialPx()
+    dragRef.current = { startY: e.touches[0].clientY, startPx }
+    if (panelRef.current) {
+      panelRef.current.style.transition = 'none'
+      panelRef.current.style.transform = `translateY(${startPx}px)`
+    }
+  }
+
+  function onHandleTouchMove(e: React.TouchEvent) {
+    if (!dragRef.current || !panelRef.current) return
+    const deltaY = e.touches[0].clientY - dragRef.current.startY
+    const newY = Math.max(0, dragRef.current.startPx + deltaY)
+    panelRef.current.style.transform = `translateY(${newY}px)`
   }
 
   function onHandleTouchEnd(e: React.TouchEvent) {
-    if (touchStartY.current === null) return
-    const deltaY = e.changedTouches[0].clientY - touchStartY.current
-    touchStartY.current = null
-    if (deltaY < -50 && touchSnap.current === 'partial') {
+    if (!dragRef.current || !panelRef.current) return
+    const deltaY = e.changedTouches[0].clientY - dragRef.current.startY
+    const endY = Math.max(0, dragRef.current.startPx + deltaY)
+    const prevSnap = snapRef.current
+    dragRef.current = null
+
+    const vh = window.innerHeight
+    const partialPx = getPartialPx()
+
+    if (endY < vh * 0.5) {
+      // Panel covers >50% of screen → full
+      snapRef.current = 'full'
       setSnapPoint('full')
-    } else if (deltaY > 50) {
-      if (touchSnap.current === 'full') setSnapPoint('partial')
-      else handleClose()
+      moveTo(0, true)
+    } else if (prevSnap === 'full' && deltaY > 20) {
+      // Full → dragging down → partial
+      snapRef.current = 'partial'
+      setSnapPoint('partial')
+      moveTo(partialPx, true)
+    } else if (prevSnap === 'partial' && deltaY > 60) {
+      // Partial → dragging down → close
+      moveTo(panelRef.current.offsetHeight, true)
+      handleClose()
+    } else {
+      // Snap back to current position
+      moveTo(prevSnap === 'full' ? 0 : partialPx, true)
     }
   }
 
   if (!storeId && !open) return null
 
-  // 모바일: inline style로 snap 제어 / 데스크탑: Tailwind sm: 클래스
-  const mobileY = !open ? '100%' : snapPoint === 'full' ? '0%' : '62%'
-  const panelStyle = isDesktop ? undefined : { transform: `translateY(${mobileY})` }
+  // Desktop only: slide in/out from right
+  const desktopClass = open ? 'sm:translate-x-0' : 'sm:translate-x-[calc(100%+12px)]'
+  // Border/radius: hidden when full-screen mobile (seamless edge)
+  const isMobileFull = !isDesktop && snapPoint === 'full'
 
   return (
     <>
@@ -132,21 +200,24 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
         onClick={handleClose}
       />
 
-      {/* Panel — full screen on mobile, floating on desktop */}
+      {/* Panel */}
       <div
+        ref={panelRef}
         className={`
           fixed z-50 bg-white flex flex-col shadow-2xl
-          transition-transform duration-300
-          inset-x-0 bottom-0 top-14 rounded-t-2xl border-t border-gray-200
-          sm:inset-x-auto sm:right-3 sm:top-3 sm:bottom-3 sm:w-full sm:max-w-[440px] sm:rounded-2xl sm:border
-          ${open ? 'sm:translate-x-0' : 'sm:translate-x-[calc(100%+12px)]'}
+          sm:transition-transform sm:duration-300
+          inset-x-0 bottom-0 top-0
+          sm:inset-x-auto sm:right-3 sm:top-3 sm:bottom-3 sm:w-full sm:max-w-[440px]
+          sm:rounded-2xl sm:border
+          ${isMobileFull ? '' : 'rounded-t-2xl border-t border-gray-200'}
+          ${desktopClass}
         `}
-        style={panelStyle}
       >
         {/* 드래그 핸들 (모바일 전용) */}
         <div
-          className="sm:hidden flex justify-center pt-3 pb-1 shrink-0 cursor-grab active:cursor-grabbing touch-none"
+          className="sm:hidden flex justify-center pt-3 pb-1 shrink-0 touch-none"
           onTouchStart={onHandleTouchStart}
+          onTouchMove={onHandleTouchMove}
           onTouchEnd={onHandleTouchEnd}
         >
           <div className="w-10 h-1 rounded-full bg-gray-300" />
@@ -154,8 +225,9 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
 
         {/* Header */}
         <div
-          className="flex items-center justify-between px-5 py-3 border-b shrink-0 sm:py-4"
+          className="flex items-center justify-between px-5 py-3 border-b shrink-0 sm:py-4 touch-none"
           onTouchStart={onHandleTouchStart}
+          onTouchMove={onHandleTouchMove}
           onTouchEnd={onHandleTouchEnd}
         >
           <div className="flex items-center gap-1.5 min-w-0 pr-2">
