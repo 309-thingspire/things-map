@@ -296,7 +296,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                   return (
                     <p className="text-sm text-[#38c68b] mt-1">
                       🚶 본사로부터 {w.walkingMinutes}분
-                      {w.distanceM > 0 && <span className="text-gray-400 text-xs ml-1">({w.distanceM}m{tmapWalking ? ' · TMAP' : ''})</span>}
+                      {w.distanceM > 0 && <span className="text-gray-400 text-xs ml-1">({w.distanceM}m)</span>}
                     </p>
                   )
                 })()}
