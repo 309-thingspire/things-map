@@ -76,6 +76,7 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
   const isProgrammaticRef = useRef(false)
   const selectedStoreRef = useRef(selectedStore)
   const prevSelectedIdRef = useRef<string | null>(null)
+  const polylineRef = useRef<NaverPolyline | null>(null)
 
   useEffect(() => { onStoreSelectRef.current = onStoreSelect })
   useEffect(() => { onDeselectRef.current = onDeselect })
@@ -278,6 +279,10 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
       if (prevMarker && prevData) prevMarker.setIcon(buildIconStatic(prevData.cat, false))
     }
 
+    // Clear previous polyline
+    polylineRef.current?.setMap(null)
+    polylineRef.current = null
+
     if (!selectedStore) {
       activeInfoWindow.current?.close()
       prevSelectedIdRef.current = null
@@ -295,6 +300,37 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
       iw.open(mapInstance.current!, marker)
       activeInfoWindow.current = iw
     }
+
+    // OSRM 자동차 경로 폴리라인
+    const store = selectedStore
+    const drawFallbackLine = () => {
+      if (!mapInstance.current || !window.naver?.maps) return
+      polylineRef.current = new window.naver.maps.Polyline({
+        path: [
+          new window.naver.maps.LatLng(OFFICE.lat, OFFICE.lng),
+          new window.naver.maps.LatLng(store.lat, store.lng),
+        ],
+        strokeColor: '#3b82f6',
+        strokeWeight: 3,
+        strokeOpacity: 0.6,
+        strokeStyle: 'shortdash',
+        map: mapInstance.current,
+      })
+    }
+    fetch(`/api/directions?startLat=${OFFICE.lat}&startLng=${OFFICE.lng}&goalLat=${store.lat}&goalLng=${store.lng}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((json) => {
+        if (!json?.path || !mapInstance.current || !window.naver?.maps) { drawFallbackLine(); return }
+        polylineRef.current?.setMap(null)
+        polylineRef.current = new window.naver.maps.Polyline({
+          path: (json.path as [number, number][]).map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng)),
+          strokeColor: '#3b82f6',
+          strokeWeight: 4,
+          strokeOpacity: 0.85,
+          map: mapInstance.current,
+        })
+      })
+      .catch(drawFallbackLine)
   }, [selectedStore]) // eslint-disable-line
 
   return <div ref={mapRef} className="w-full h-full" />

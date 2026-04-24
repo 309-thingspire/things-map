@@ -9,7 +9,7 @@ interface StorePreviewCardProps {
 }
 
 export default function StorePreviewCard({ store, onClose }: StorePreviewCardProps) {
-  const directionsUrl = `https://map.naver.com/v5/directions/${OFFICE.lng},${OFFICE.lat},${encodeURIComponent('회사')}/${store.lng},${store.lat},${encodeURIComponent(store.name)}/walk`
+  const directionsUrl = `https://map.naver.com/v5/directions/${OFFICE.lng},${OFFICE.lat},${encodeURIComponent('회사')}/${store.lng},${store.lat},${encodeURIComponent(store.name)}/car`
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-4 relative">

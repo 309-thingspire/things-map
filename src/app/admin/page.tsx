@@ -20,6 +20,15 @@ interface UserStat {
   lastLogin: string | null
   loginCount: number; reviewCount: number; requestCount: number
 }
+interface CategoryScore {
+  categoryId: string; categoryName: string; color: string | null
+  views: number; favorites: number; reviews: number
+  avgScore: number | null; score: number
+}
+interface UserPreference {
+  userId: string; userName: string; team: string
+  topCategories: CategoryScore[]
+}
 interface Stats {
   summary: { storeCount: number; userCount: number; pendingRequests: number }
   dau: number; mau: number
@@ -49,9 +58,11 @@ export default function AdminDashboard() {
   const [showAllStores, setShowAllStores] = useState(false)
   const [userSort, setUserSort] = useState<UserSortKey>('loginCount')
   const [userSortDir, setUserSortDir] = useState<'asc' | 'desc'>('desc')
+  const [preferences, setPreferences] = useState<UserPreference[]>([])
 
   useEffect(() => {
     fetch('/api/admin/stats').then(r => r.json()).then(j => { setStats(j.data); setLoading(false) })
+    fetch('/api/admin/user-preferences').then(r => r.json()).then(j => { if (j.data) setPreferences(j.data) })
   }, [])
 
   function toggleUserSort(key: UserSortKey) {
@@ -200,6 +211,50 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* 개인별 취향 분석 */}
+      {preferences.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="px-5 py-4 border-b">
+            <h2 className="font-semibold text-gray-900">개인별 카테고리 취향</h2>
+            <p className="text-xs text-gray-400 mt-0.5">최근 90일 기준 · 조회×1 + 즐겨찾기×3 + 리뷰×5</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500 whitespace-nowrap">이름</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500">팀</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-gray-500">선호 카테고리 (점수순)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {preferences.map((u) => (
+                  <tr key={u.userId} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-medium text-gray-900 whitespace-nowrap">{u.userName}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{u.team}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {u.topCategories.map((c) => (
+                          <span
+                            key={c.categoryId}
+                            className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-white font-medium"
+                            style={{ background: c.color ?? '#9ca3af' }}
+                            title={`조회 ${c.views} · 즐겨찾기 ${c.favorites} · 리뷰 ${c.reviews}${c.avgScore != null ? ` · 평균 ${c.avgScore.toFixed(1)}점` : ''}`}
+                          >
+                            {c.categoryName}
+                            <span className="opacity-75">·{c.score}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* 계정별 통계 */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
