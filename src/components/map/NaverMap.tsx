@@ -76,7 +76,6 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
   const isProgrammaticRef = useRef(false)
   const selectedStoreRef = useRef(selectedStore)
   const prevSelectedIdRef = useRef<string | null>(null)
-  const polylineRef = useRef<NaverPolyline | null>(null)
 
   useEffect(() => { onStoreSelectRef.current = onStoreSelect })
   useEffect(() => { onDeselectRef.current = onDeselect })
@@ -279,10 +278,6 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
       if (prevMarker && prevData) prevMarker.setIcon(buildIconStatic(prevData.cat, false))
     }
 
-    // Clear previous polyline
-    polylineRef.current?.setMap(null)
-    polylineRef.current = null
-
     if (!selectedStore) {
       activeInfoWindow.current?.close()
       prevSelectedIdRef.current = null
@@ -300,55 +295,41 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
       iw.open(mapInstance.current!, marker)
       activeInfoWindow.current = iw
     }
-
-    // OSRM 자동차 경로 폴리라인
-    const store = selectedStore
-    const drawFallbackLine = () => {
-      if (!mapInstance.current || !window.naver?.maps) return
-      polylineRef.current = new window.naver.maps.Polyline({
-        path: [
-          new window.naver.maps.LatLng(OFFICE.lat, OFFICE.lng),
-          new window.naver.maps.LatLng(store.lat, store.lng),
-        ],
-        strokeColor: '#3b82f6',
-        strokeWeight: 3,
-        strokeOpacity: 0.6,
-        strokeStyle: 'shortdash',
-        map: mapInstance.current,
-      })
-    }
-    fetch(`/api/directions?startLat=${OFFICE.lat}&startLng=${OFFICE.lng}&goalLat=${store.lat}&goalLng=${store.lng}`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((json) => {
-        if (!json?.path || !mapInstance.current || !window.naver?.maps) { drawFallbackLine(); return }
-        polylineRef.current?.setMap(null)
-        polylineRef.current = new window.naver.maps.Polyline({
-          path: (json.path as [number, number][]).map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng)),
-          strokeColor: '#3b82f6',
-          strokeWeight: 4,
-          strokeOpacity: 0.85,
-          map: mapInstance.current,
-        })
-      })
-      .catch(drawFallbackLine)
   }, [selectedStore]) // eslint-disable-line
 
   return <div ref={mapRef} className="w-full h-full" />
 }
 
 function buildLocationIcon(heading: number | null) {
-  const size = 40
+  const size = 80
   const half = size / 2
-  // Cone SVG pointing up, rotated by heading degrees
-  const cone = heading != null ? `
-    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="position:absolute;top:0;left:0;" xmlns="http://www.w3.org/2000/svg">
+  const radius = 34
+  const halfAngleDeg = 30
+
+  // Sector (fan) pointing "up" before rotation — like Naver Maps
+  const cone = heading != null ? (() => {
+    const a1 = (-90 - halfAngleDeg) * Math.PI / 180
+    const a2 = (-90 + halfAngleDeg) * Math.PI / 180
+    const x1 = (half + radius * Math.cos(a1)).toFixed(2)
+    const y1 = (half + radius * Math.sin(a1)).toFixed(2)
+    const x2 = (half + radius * Math.cos(a2)).toFixed(2)
+    const y2 = (half + radius * Math.sin(a2)).toFixed(2)
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="position:absolute;top:0;left:0;" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="headingGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.08"/>
+        </radialGradient>
+      </defs>
       <g transform="rotate(${heading}, ${half}, ${half})">
-        <path d="M ${half} ${half - 10} L ${half - 8} ${half + 4} L ${half + 8} ${half + 4} Z" fill="rgba(59,130,246,0.45)" />
+        <path d="M ${half} ${half} L ${x1} ${y1} A ${radius} ${radius} 0 0 1 ${x2} ${y2} Z" fill="url(#headingGrad)" />
       </g>
-    </svg>` : ''
+    </svg>`
+  })() : ''
+
   const content = `<div style="position:relative;width:${size}px;height:${size}px;">
     ${cone}
-    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:16px;height:16px;background:#3b82f6;border-radius:50%;border:2.5px solid white;box-shadow:0 0 0 5px rgba(59,130,246,0.22);"></div>
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:18px;height:18px;background:#3b82f6;border-radius:50%;border:3px solid white;box-shadow:0 0 0 7px rgba(59,130,246,0.18);"></div>
   </div>`
   return {
     content,

@@ -155,11 +155,24 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                   ))}
                 </div>
 
-                <div className="flex items-center gap-2 mt-1">
-                  {favoriteCount >= 5 && (
-                    <span dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 18) }} />
+                <div className="flex items-start justify-between gap-2 mt-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {favoriteCount >= 5 && (
+                      <span className="shrink-0" dangerouslySetInnerHTML={{ __html: getIconSvgHtml('award-fill', '#f59e0b', 18) }} />
+                    )}
+                    <h2 className="text-xl font-bold text-gray-900 truncate">{store.name}</h2>
+                  </div>
+                  {store.naverUrl && (
+                    <a
+                      href={store.naverUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 p-1 text-green-500 hover:text-green-700 transition-colors"
+                      title="네이버 지도에서 보기"
+                    >
+                      <NaverIcon size={22} />
+                    </a>
                   )}
-                  <h2 className="text-xl font-bold text-gray-900">{store.name}</h2>
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{store.address}</p>
                 {store.walkingMinutes != null && (
@@ -168,29 +181,18 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                 {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
                 {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
 
-                <div className="flex items-center gap-2 mt-3">
-                  {store.naverUrl && (
-                    <a
-                      href={store.naverUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-[#03C75A] text-white hover:bg-[#02b350] transition-colors"
-                    >
-                      <NaverIcon size={16} />
-                      지도보기
-                    </a>
-                  )}
-                  <button
-                    onClick={toggleFavorite}
-                    className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                      isFavorited ? 'text-red-500 hover:text-red-600' : 'text-gray-400 hover:text-red-400'
-                    }`}
-                    title={isFavorited ? '즐겨찾기 해제' : '즐겨찾기'}
-                  >
-                    <Heart size={18} className={isFavorited ? 'fill-red-500' : ''} />
-                    {favoriteCount > 0 && <span className="font-medium">{favoriteCount}</span>}
-                  </button>
-                </div>
+                <button
+                  onClick={toggleFavorite}
+                  className={`mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                    isFavorited
+                      ? 'bg-red-50 text-red-500 hover:bg-red-100'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <Heart size={16} className={isFavorited ? 'fill-red-500' : ''} />
+                  {isFavorited ? '즐겨찾기 해제' : '즐겨찾기'}
+                  {favoriteCount > 0 && <span className="font-bold ml-1">{favoriteCount}</span>}
+                </button>
               </div>
 
               {/* 메뉴 */}

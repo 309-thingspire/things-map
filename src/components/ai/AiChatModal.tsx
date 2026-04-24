@@ -137,8 +137,8 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
           </button>
         </div>
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {/* Messages — px 없음: 카드 가로 스크롤이 modal 전체 너비 사용 */}
+        <div className="flex-1 overflow-y-auto py-4 space-y-4">
           {messages.length === 0 && (
             <div className="text-center text-gray-400 text-sm mt-8">
               <Bot size={32} className="mx-auto mb-2 text-gray-300" />
@@ -147,7 +147,7 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
           )}
 
           {messages.map((msg, i) => (
-            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            <div key={i} className={`flex px-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={msg.role === 'user' ? 'max-w-[80%]' : 'w-full'}>
                 {/* 사용자 메시지: 말풍선 */}
                 {msg.role === 'user' && msg.content && (
@@ -184,12 +184,14 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
                       <div className="px-1 py-2 text-sm text-gray-400 animate-pulse">답변 생성 중...</div>
                     ) : null}
 
-                    {/* 카드 가로 스크롤 */}
+                    {/* 카드 가로 스크롤 — -mx-4 px-4로 modal 전체 너비까지 확장 */}
                     {msg.stores && msg.stores.length > 0 && (
-                      <div className="mt-2 flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 items-start scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-                        {msg.stores.map((store) => (
-                          <ChatStoreCard key={store.id} store={store} onClose={onClose} />
-                        ))}
+                      <div className="mt-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        <div className="flex gap-3 items-start">
+                          {msg.stores.map((store) => (
+                            <ChatStoreCard key={store.id} store={store} onClose={onClose} />
+                          ))}
+                        </div>
                       </div>
                     )}
                   </>
