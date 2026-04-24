@@ -220,7 +220,7 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
             ${cat?.color ? `<span style="display:inline-block;background:${cat.color};color:white;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;margin-bottom:6px;">${cat.name}</span>` : ''}
             <strong style="font-size:14px;display:block;margin-bottom:2px;">${store.name}</strong>
             <p style="font-size:11px;color:#888;margin:0 0 6px;line-height:1.4;">${store.address}</p>
-            ${store.walkingMinutes != null ? `<p style="font-size:12px;color:#38c68b;margin:0 0 2px;">🏢 회사로부터 ${store.walkingMinutes}분</p>` : ''}
+            ${store.walkingMinutes != null ? `<p style="font-size:12px;color:#38c68b;margin:0 0 2px;">🏢 본사로부터 ${store.walkingMinutes}분</p>` : ''}
             ${store.internalRating ? `<p style="font-size:12px;color:#f59e0b;margin:0 0 8px;">★ ${store.internalRating.avgTotal.toFixed(1)} <span style="color:#aaa;">(${store.internalRating.reviewCount}개)</span></p>` : '<div style="margin-bottom:8px;"></div>'}
             <button onclick="window.__openStoreDetail?.('${store.id}')" style="width:100%;text-align:center;border:1px solid #e5e7eb;color:#374151;padding:6px 0;border-radius:8px;font-size:12px;background:white;cursor:pointer;">상세보기</button>
           </div>

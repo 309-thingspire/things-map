@@ -283,7 +283,7 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                 </div>
                 <p className="text-sm text-gray-500 mt-1">{store.address}</p>
                 {store.walkingMinutes != null && (
-                  <p className="text-sm text-[#38c68b] mt-1">🏢 회사로부터 {store.walkingMinutes}분</p>
+                  <p className="text-sm text-[#38c68b] mt-1">🏢 본사로부터 {store.walkingMinutes}분</p>
                 )}
                 {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
                 {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
@@ -406,12 +406,16 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
                   className="flex-shrink-0 w-36 text-left rounded-xl border border-gray-100 bg-gray-50 p-3 hover:shadow-md transition-all"
                 >
                   <p className="text-xs font-semibold text-gray-900 truncate">{rec.name}</p>
-                  <p className="text-[10px] text-gray-400 truncate mt-0.5">{rec.address}</p>
+                  <div className="flex items-center gap-1.5 text-[10px] mt-0.5">
+                    <span className={rec.internalRating ? 'text-amber-500' : 'text-gray-300'}>
+                      ★ {rec.internalRating ? rec.internalRating.avgTotal.toFixed(1) : '0.0'}
+                    </span>
+                    {(rec.favoriteCount ?? 0) > 0 && (
+                      <span className="text-gray-400">❤ {rec.favoriteCount}</span>
+                    )}
+                  </div>
                   {rec.walkingMinutes != null && (
-                    <p className="text-[10px] text-[#38c68b] mt-1">🏢 {rec.walkingMinutes}분</p>
-                  )}
-                  {rec.internalRating && (
-                    <p className="text-[10px] text-amber-500 mt-0.5">★ {rec.internalRating.avgTotal.toFixed(1)}</p>
+                    <p className="text-[10px] text-blue-500 mt-0.5">🏢 본사로부터 {rec.walkingMinutes}분</p>
                   )}
                 </button>
               ))}

@@ -37,8 +37,7 @@ export default function StorePreviewCard({ store, onClose }: StorePreviewCardPro
       <div className="mt-2 space-y-1">
         {store.walkingMinutes != null && (
           <p className="text-xs text-blue-500">
-            🚶 도보 {store.walkingMinutes}분
-            {store.officeDistanceM != null && ` (${store.officeDistanceM}m)`}
+            🏢 본사로부터 {store.walkingMinutes}분
           </p>
         )}
         {store.internalRating && (
