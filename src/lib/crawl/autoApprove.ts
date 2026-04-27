@@ -15,29 +15,41 @@ export async function autoApproveStaging(
   data: CrawlData,
 ): Promise<'APPROVED' | 'UNREGISTERED' | 'REJECTED'> {
   try {
-    // 1. 정확한 이름 일치 (대소문자 무시)
+    const norm = (s: string) => s.replace(/\s/g, '').toLowerCase()
+    const nk = norm(keyword)
+    const nd = norm(data.name)
+
+    // 1. 정확한 이름 일치 (대소문자 무시) — data.name 기준
     let store = await prisma.store.findFirst({
       where: { name: { equals: data.name.trim(), mode: 'insensitive' } },
     })
 
-    // 2. 크롤 키워드로도 검색 (결과명과 키워드가 다를 수 있음)
+    // 2. 키워드 정확 일치 (결과명과 키워드가 다를 수 있음)
     if (!store && keyword !== data.name) {
       store = await prisma.store.findFirst({
         where: { name: { equals: keyword.trim(), mode: 'insensitive' } },
       })
     }
 
-    // 3. 부분 포함 검색 (매장명에 키워드가 포함되거나 그 반대)
+    // 3. 부분 포함 검색 — 점수 기반으로 가장 잘 맞는 매장 선택
     if (!store) {
-      const norm = (s: string) => s.replace(/\s/g, '').toLowerCase()
-      const nk = norm(keyword)
-      const nd = norm(data.name)
       const all = await prisma.store.findMany({ select: { id: true, name: true } })
-      const matched = all.find((s) => {
+      let best: { id: string; name: string; score: number } | null = null
+      for (const s of all) {
         const ns = norm(s.name)
-        return ns.includes(nk) || nk.includes(ns) || ns.includes(nd) || nd.includes(ns)
-      })
-      if (matched) store = await prisma.store.findUnique({ where: { id: matched.id } })
+        let score = 0
+        if (ns === nk || ns === nd) score = 100           // 정규화 후 일치
+        else if (nk.includes(ns) && ns.length >= 2) score = 80   // 키워드에 DB명 포함
+        else if (ns.includes(nk) && nk.length >= 2) score = 70   // DB명에 키워드 포함
+        else if (nd.includes(ns) && ns.length >= 2) score = 60   // 결과명에 DB명 포함
+        else if (ns.includes(nd) && nd.length >= 2) score = 50   // DB명에 결과명 포함
+        if (score > 0 && (!best || score > best.score)) {
+          best = { id: s.id, name: s.name, score }
+        }
+      }
+      if (best) {
+        store = await prisma.store.findUnique({ where: { id: best.id } })
+      }
     }
 
     if (!store) {
@@ -48,40 +60,47 @@ export async function autoApproveStaging(
       return 'UNREGISTERED'
     }
 
-    // 매장 데이터 업데이트 (좌표는 변경하지 않음)
-    await prisma.$transaction(async (tx) => {
-      if (data.menus && data.menus.length > 0) {
-        await tx.menu.deleteMany({ where: { storeId: store!.id } })
-        await tx.menu.createMany({
+    const storeId = store.id
+
+    const storeUpdate = prisma.store.update({
+      where: { id: storeId },
+      data: {
+        ...(data.phone ? { phone: data.phone } : {}),
+        ...(data.businessHours ? { businessHours: data.businessHours } : {}),
+        ...(data.tags?.length ? { themeTags: data.tags } : {}),
+        lastCrawledAt: new Date(),
+      },
+    })
+
+    const stagingUpdate = prisma.stagingStore.update({
+      where: { id: stagingId },
+      data: { status: 'APPROVED' },
+    })
+
+    // 배열 트랜잭션 사용 (Neon 트랜잭션 모드 풀링 호환 — interactive 트랜잭션 미지원)
+    if (data.menus && data.menus.length > 0) {
+      await prisma.$transaction([
+        prisma.menu.deleteMany({ where: { storeId } }),
+        prisma.menu.createMany({
           data: data.menus.map((m) => ({
-            storeId: store!.id,
+            storeId,
             name: m.name,
-            price: m.price ?? null,
+            price: m.price != null ? Math.round(m.price) : null,
             isRepresentative: false,
           })),
-        })
-      }
-      await tx.store.update({
-        where: { id: store!.id },
-        data: {
-          ...(data.phone ? { phone: data.phone } : {}),
-          ...(data.businessHours ? { businessHours: data.businessHours } : {}),
-          ...(data.tags?.length ? { themeTags: data.tags } : {}),
-          lastCrawledAt: new Date(),
-        },
-      })
-      await tx.stagingStore.update({
-        where: { id: stagingId },
-        data: { status: 'APPROVED' },
-      })
-    })
+        }),
+        storeUpdate,
+        stagingUpdate,
+      ])
+    } else {
+      await prisma.$transaction([storeUpdate, stagingUpdate])
+    }
 
     return 'APPROVED'
   } catch {
-    await prisma.stagingStore.update({
-      where: { id: stagingId },
-      data: { status: 'REJECTED' },
-    }).catch(() => {})
+    await prisma.stagingStore
+      .update({ where: { id: stagingId }, data: { status: 'REJECTED' } })
+      .catch(() => {})
     return 'REJECTED'
   }
 }

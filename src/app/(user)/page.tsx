@@ -70,7 +70,7 @@ function HorizontalStoreCard({ store, selected, onClick }: { store: StoreListIte
         )}
       </div>
       {store.walkingMinutes != null && (
-        <p className="text-[11px] text-blue-500 mt-0.5">🏢 본사로부터 {store.walkingMinutes}분</p>
+        <p className="text-[11px] text-blue-500 mt-0.5">🚶 도보 {store.walkingMinutes}분</p>
       )}
     </button>
   )
@@ -91,6 +91,23 @@ export default function HomePage() {
   const { center, zoom, moveTo } = useMap()
   const [mapCenter, setMapCenter] = useState(center)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
+
+  // 페이지 마운트 시 내 위치로 지도 초기화
+  useEffect(() => {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setUserLocation(loc)
+        setMapCenter(loc)
+        moveTo(loc.lat, loc.lng, DEFAULT_ZOOM)
+      },
+      () => { /* 권한 거부 시 기본값(본사) 유지 */ },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 300000 },
+    )
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     type DOEI = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> }
     if (typeof (DeviceOrientationEvent as DOEI).requestPermission !== 'function') return
@@ -416,7 +433,7 @@ export default function HomePage() {
                       <p className="text-xs text-gray-500 mt-0.5">{store.address}</p>
                       <div className="flex gap-3 mt-1">
                         {store.walkingMinutes != null && (
-                          <span className="text-xs text-blue-500">🏢 회사로부터 {store.walkingMinutes}분</span>
+                          <span className="text-xs text-blue-500">🚶 도보 {store.walkingMinutes}분</span>
                         )}
                         {store.internalRating && (
                           <span className="text-xs text-amber-500">★ {store.internalRating.avgTotal.toFixed(1)}</span>

@@ -299,7 +299,7 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
                   const w = tmapWalking ?? { distanceM: store.officeDistanceM ?? 0, walkingMinutes: store.walkingMinutes! }
                   return (
                     <p className="text-sm text-[#38c68b] mt-1">
-                      🚶 본사로부터 {w.walkingMinutes}분
+                      🚶 도보 {w.walkingMinutes}분
                       {w.distanceM > 0 && <span className="text-gray-400 text-xs ml-1">({w.distanceM}m)</span>}
                     </p>
                   )
@@ -434,7 +434,7 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
                     )}
                   </div>
                   {rec.walkingMinutes != null && (
-                    <p className="text-[10px] text-blue-500 mt-0.5">🏢 본사로부터 {rec.walkingMinutes}분</p>
+                    <p className="text-[10px] text-blue-500 mt-0.5">🚶 도보 {rec.walkingMinutes}분</p>
                   )}
                 </button>
               ))}
