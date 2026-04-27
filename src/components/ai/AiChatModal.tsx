@@ -96,11 +96,31 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
         const { done, value } = await reader.read()
         if (done) break
         full += decoder.decode(value, { stream: true })
-        onMessages([...history, { role: 'assistant', content: full }])
+        // 스트리밍 중 STORE_MAP 메타데이터 라인은 사용자에게 보이지 않도록 제거
+        const mapIdx = full.indexOf('\n[STORE_MAP:')
+        const displayContent = mapIdx >= 0 ? full.slice(0, mapIdx) : full
+        onMessages([...history, { role: 'assistant', content: displayContent }])
       }
 
-      const ids = [...new Set([...full.matchAll(STORE_TAG_RE)].map((m) => m[1]))]
-      const cleanContent = full.replace(STORE_TAG_RE, '').replace(/[ \t]+\n/g, '\n').trim()
+      // STORE_MAP 파싱: 서버가 보낸 숫자→실제storeId 매핑
+      const mapSplit = full.split('\n[STORE_MAP:')
+      const indexMap: Record<string, string> = {}
+      let resolvedFull = full
+      if (mapSplit.length > 1) {
+        try {
+          const mapJson = mapSplit[mapSplit.length - 1].replace(/\]$/, '')
+          Object.assign(indexMap, JSON.parse(mapJson))
+        } catch { /* ignore parse error */ }
+        resolvedFull = mapSplit[0]
+      }
+
+      // [STORE:숫자] → [STORE:실제ID] 치환
+      const resolved = resolvedFull.replace(STORE_TAG_RE, (_, idx) =>
+        `[STORE:${indexMap[idx] ?? idx}]`
+      )
+
+      const ids = [...new Set([...resolved.matchAll(STORE_TAG_RE)].map((m) => m[1]))]
+      const cleanContent = resolved.replace(STORE_TAG_RE, '').replace(/[ \t]+\n/g, '\n').trim()
 
       let stores: StoreListItem[] = []
       if (ids.length > 0) {

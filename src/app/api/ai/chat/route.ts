@@ -3,13 +3,16 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 
 const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3:latest'
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3.5:4b'
 const CACHE_TTL = 5 * 60 * 1000
 
-let storeCache: { data: string; ts: number } | null = null
+// 숫자 인덱스 → 실제 storeId 매핑 포함
+let storeCache: { data: string; indexMap: Record<string, string>; ts: number } | null = null
 
-async function buildStoreContext(): Promise<string> {
-  if (storeCache && Date.now() - storeCache.ts < CACHE_TTL) return storeCache.data
+async function buildStoreContext(): Promise<{ context: string; indexMap: Record<string, string> }> {
+  if (storeCache && Date.now() - storeCache.ts < CACHE_TTL) {
+    return { context: storeCache.data, indexMap: storeCache.indexMap }
+  }
 
   const stores = await prisma.store.findMany({
     where: { status: 'ACTIVE' },
@@ -20,13 +23,17 @@ async function buildStoreContext(): Promise<string> {
     orderBy: { name: 'asc' },
   })
 
-  const lines = stores.map((s) => {
+  const indexMap: Record<string, string> = {}
+
+  const lines = stores.map((s, i) => {
+    const idx = String(i + 1)
+    indexMap[idx] = s.id
     const menus = s.menus.length
       ? s.menus.map((m) => `${m.name}${m.price ? `(${m.price.toLocaleString()}원)` : ''}`).join(', ')
       : ''
     const tags = s.themeTags.join(', ')
     return [
-      `[ID:${s.id}]`,
+      `[ID:${idx}]`,   // 짧은 숫자 인덱스 사용
       s.name,
       s.category?.name ? `카테고리:${s.category.name}` : '',
       `주소:${s.address}`,
@@ -39,8 +46,8 @@ async function buildStoreContext(): Promise<string> {
   })
 
   const data = lines.join('\n')
-  storeCache = { data, ts: Date.now() }
-  return data
+  storeCache = { data, indexMap, ts: Date.now() }
+  return { context: data, indexMap }
 }
 
 export async function POST(request: NextRequest) {
@@ -50,9 +57,8 @@ export async function POST(request: NextRequest) {
   }
 
   const { messages } = await request.json() as { messages: { role: string; content: string }[] }
-  const storeContext = await buildStoreContext()
+  const { context: storeContext, indexMap } = await buildStoreContext()
 
-  // 마지막 사용자 메시지 추출 (로그 저장용)
   const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 
   const systemPrompt = `당신은 띵봇입니다. 회사 근처 맛집/카페/식당을 친근하게 추천해주는 어시스턴트예요 😊
@@ -63,14 +69,12 @@ ${storeContext}
 ## 규칙
 1. 반드시 위 목록에 있는 매장만 추천하세요.
 2. 추천은 최대 3개까지만 하세요.
-3. 매장을 언급할 때는 반드시 **같은 줄**에 [STORE:ID] 태그를 붙이세요.
-   올바른 예: - **카페노티드** [STORE:abc123] — 커피가 맛있어요
-   잘못된 예: - **카페노티드**\n[STORE:abc123]  ← 줄바꿈 금지
+3. 매장을 언급할 때는 반드시 **같은 줄**에 [STORE:번호] 태그를 붙이세요. 번호는 위 목록의 [ID:번호]와 정확히 일치해야 합니다.
+   올바른 예: - **카페노티드** [STORE:5] — 커피가 맛있어요
+   잘못된 예: - **카페노티드**\n[STORE:5]  ← 줄바꿈 금지
 4. 목록 항목(-) 안에 내용을 함께 작성하세요. 빈 항목(-만 있는 줄) 금지.
-   올바른 예: - **한식**: 오봉집 [STORE:xyz] — 든든한 한 끼
-   잘못된 예: -\n**한식**: 오봉집  ← 이렇게 하지 마세요
 5. 답변은 짧고 핵심만. 친근하고 따뜻한 말투로.
-6. 마크다운 사용: **굵게**, ## 제목, - 목록 (한 줄에 내용 포함).
+6. 마크다운 사용: **굵게**, ## 제목, - 목록.
 7. 위 목록에 없는 질문(날씨, 주식 등)은 "등록된 매장 정보만 알아요 😊"라고만 답하세요.
 8. 한국어로만 답하세요.`
 
@@ -100,7 +104,6 @@ ${storeContext}
   }
 
   const upstreamBody = ollamaRes.body
-
   let fullResponse = ''
 
   const stream = new ReadableStream({
@@ -130,10 +133,18 @@ ${storeContext}
             }
           }
         }
+        // 스트리밍 완료 후 숫자→실제ID 매핑을 클라이언트에 전송
+        // 클라이언트는 이 라인을 파싱해 [STORE:숫자]를 실제 ID로 치환함
+        const mapLine = `\n[STORE_MAP:${JSON.stringify(indexMap)}]`
+        controller.enqueue(new TextEncoder().encode(mapLine))
       } finally {
         controller.close()
-        // 대화 로그 저장 (fire-and-forget)
-        const storeIds = [...(fullResponse.match(/\[STORE:([^\]]+)\]/g) ?? [])].map((m) => m.slice(7, -1))
+        // 대화 로그 저장 (fire-and-forget) — indexMap으로 실제 storeId 추출
+        const storeIds = [...new Set(
+          [...fullResponse.matchAll(/\[STORE:(\w+)\]/g)]
+            .map((m) => indexMap[m[1]] ?? m[1])
+            .filter(Boolean)
+        )]
         prisma.chatLog.create({
           data: {
             userId: session.userId,
