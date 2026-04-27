@@ -60,7 +60,9 @@ export async function GET(request: NextRequest) {
       include: {
         category: { select: { id: true, name: true, icon: true, color: true } },
         internalRating: { select: { avgTotal: true, reviewCount: true } },
+        _count: false,
       },
+      // lastCrawledAt 포함 (Prisma select 확장 불가 → include 전체 가져옴)
     })
 
     type StoreWithDist = typeof stores[number] & { distance: number }

@@ -5,10 +5,17 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const goalLat = searchParams.get('goalLat')
   const goalLng = searchParams.get('goalLng')
+  const startLatParam = searchParams.get('startLat')
+  const startLngParam = searchParams.get('startLng')
 
   if (!goalLat || !goalLng) {
     return NextResponse.json({ error: '목적지 좌표가 필요합니다.' }, { status: 400 })
   }
+
+  // 출발지: 파라미터가 있으면 사용, 없으면 본사
+  const startLat = startLatParam ? parseFloat(startLatParam) : OFFICE.lat
+  const startLng = startLngParam ? parseFloat(startLngParam) : OFFICE.lng
+  const startName = startLatParam ? '내 위치' : '본사'
 
   const apiKey = process.env.TMAP_OPEN_API_KEY
   if (!apiKey) {
@@ -25,17 +32,18 @@ export async function GET(request: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          startX: String(OFFICE.lng),
-          startY: String(OFFICE.lat),
+          startX: String(startLng),
+          startY: String(startLat),
           endX: goalLng,
           endY: goalLat,
-          startName: '본사',
+          startName,
           endName: '목적지',
           searchOption: '0',
           reqCoordType: 'WGS84GEO',
           resCoordType: 'WGS84GEO',
         }),
-        next: { revalidate: 86400 }, // 1일 캐시
+        // 출발지가 고정(본사)일 때만 캐시 적용
+        ...(startLatParam ? {} : { next: { revalidate: 86400 } }),
       }
     )
 

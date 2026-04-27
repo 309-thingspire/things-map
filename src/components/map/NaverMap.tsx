@@ -52,13 +52,14 @@ interface NaverMapProps {
   center: { lat: number; lng: number }
   zoom: number
   selectedStore?: StoreListItem | null
+  userLocation?: { lat: number; lng: number } | null
   onStoreSelect?: (store: StoreListItem) => void
   onDeselect?: () => void
   onStoreDetail?: (id: string) => void
   onMapMove?: () => void
 }
 
-export default function NaverMap({ stores, center, zoom, selectedStore, onStoreSelect, onDeselect, onStoreDetail, onMapMove }: NaverMapProps) {
+export default function NaverMap({ stores, center, zoom, selectedStore, userLocation, onStoreSelect, onDeselect, onStoreDetail, onMapMove }: NaverMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstance = useRef<NaverMapInstance | null>(null)
   const markersMap = useRef<Map<string, NaverMarker>>(new Map())
@@ -303,9 +304,12 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
       activeInfoWindow.current = iw
     }
 
-    // TMAP 도보 경로
+    // TMAP 도보 경로 — 내 위치 있으면 내 위치 기준, 없으면 서버가 본사 기준으로 처리
     const map = mapInstance.current!
-    fetch(`/api/tmap/walking?goalLat=${selectedStore.lat}&goalLng=${selectedStore.lng}`)
+    const startParams = userLocation
+      ? `&startLat=${userLocation.lat}&startLng=${userLocation.lng}`
+      : ''
+    fetch(`/api/tmap/walking?goalLat=${selectedStore.lat}&goalLng=${selectedStore.lng}${startParams}`)
       .then((r) => r.ok ? r.json() : null)
       .then((j: { path?: [number, number][] } | null) => {
         if (!j?.path?.length || !window.naver?.maps) return
@@ -320,7 +324,7 @@ export default function NaverMap({ stores, center, zoom, selectedStore, onStoreS
         })
       })
       .catch(() => {})
-  }, [selectedStore]) // eslint-disable-line
+  }, [selectedStore, userLocation]) // eslint-disable-line
 
   return <div ref={mapRef} className="w-full h-full" />
 }

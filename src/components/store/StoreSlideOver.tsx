@@ -14,6 +14,7 @@ import { OFFICE } from '@/lib/office'
 
 interface Props {
   storeId: string | null
+  userLocation?: { lat: number; lng: number } | null
   onClose: () => void
   onStoreSelect?: (store: StoreListItem) => void
   onFavoriteChange?: (isFavorited: boolean) => void
@@ -22,7 +23,7 @@ interface Props {
 const PARTIAL_VISIBLE_PX = 310  // height of content visible in partial snap
 const ANIM = 'transform 0.36s cubic-bezier(0.32,0.72,0,1)'
 
-export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavoriteChange }: Props) {
+export default function StoreSlideOver({ storeId, userLocation, onClose, onStoreSelect, onFavoriteChange }: Props) {
   const { user } = useAuth()
   const [store, setStore] = useState<StoreDetail | null>(null)
   const [reviews, setReviews] = useState<Review[]>([])
@@ -105,7 +106,10 @@ export default function StoreSlideOver({ storeId, onClose, onStoreSelect, onFavo
       setReviews(reviewsJson?.data.reviews ?? [])
 
       if (loadedStore?.lat && loadedStore?.lng) {
-        fetch(`/api/tmap/walking?goalLat=${loadedStore.lat}&goalLng=${loadedStore.lng}`)
+        const startParams = userLocation
+          ? `&startLat=${userLocation.lat}&startLng=${userLocation.lng}`
+          : ''
+        fetch(`/api/tmap/walking?goalLat=${loadedStore.lat}&goalLng=${loadedStore.lng}${startParams}`)
           .then((r) => r.ok ? r.json() : null)
           .then((j) => { if (j?.walkingMinutes) setTmapWalking({ distanceM: j.distanceM, walkingMinutes: j.walkingMinutes }) })
           .catch(() => {})

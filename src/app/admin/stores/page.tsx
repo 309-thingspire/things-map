@@ -15,6 +15,7 @@ interface StoreRow extends StoreDetail {
   updatedAt: string
   officeDistanceM: number | null
   walkingMinutes: number | null
+  lastCrawledAt: string | null
 }
 
 export default function AdminStoresPage() {
@@ -255,7 +256,12 @@ export default function AdminStoresPage() {
           </Button>
           <Button variant="outline" onClick={handleExportCsv}>📤 CSV 내보내기</Button>
           {isCrawlEnabled ? (
-            <Button variant="outline" size="icon" title="메뉴 크롤링" onClick={() => { setCrawlOpen(true); setCrawlProgress(null); setCrawlSelected(new Set(stores.map(s => s.id))); setCrawlFilter('') }}>
+            <Button variant="outline" size="icon" title="메뉴 크롤링" onClick={() => {
+              setCrawlOpen(true); setCrawlProgress(null); setCrawlFilter('')
+              // 크롤 안 된 매장만 기본 선택
+              const uncrawled = stores.filter(s => !s.lastCrawledAt).map(s => s.id)
+              setCrawlSelected(new Set(uncrawled.length > 0 ? uncrawled : stores.map(s => s.id)))
+            }}>
               <Terminal size={15} />
             </Button>
           ) : (
@@ -567,45 +573,85 @@ export default function AdminStoresPage() {
                 </div>
               </div>
             ) : (
-              /* 선택 화면 */
+              /* 선택 화면 — 테이블 */
               <div className="flex flex-col gap-3 min-h-0">
-                <div className="shrink-0 flex gap-2">
+                <div className="shrink-0">
                   <Input
                     placeholder="매장 검색…"
                     value={crawlFilter}
                     onChange={(e) => setCrawlFilter(e.target.value)}
-                    className="flex-1"
                   />
-                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setCrawlSelected(new Set(stores.map(s => s.id)))}>전체 선택</Button>
-                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setCrawlSelected(new Set())}>해제</Button>
                 </div>
-                <div className="flex-1 overflow-y-auto border rounded-lg divide-y min-h-0 max-h-96">
-                  {stores
+                {(() => {
+                  const filtered = [...stores]
                     .filter(s => !crawlFilter || s.name.includes(crawlFilter))
-                    .map(s => (
-                      <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          className="rounded"
-                          checked={crawlSelected.has(s.id)}
-                          onChange={(e) => {
-                            const next = new Set(crawlSelected)
-                            if (e.target.checked) next.add(s.id)
-                            else next.delete(s.id)
-                            setCrawlSelected(next)
-                          }}
-                        />
-                        <span className="flex-1 truncate font-medium">{s.name}</span>
-                        <span className="text-xs text-gray-400 shrink-0">{s.category?.name ?? '미분류'}</span>
-                      </label>
-                    ))}
-                </div>
+                    // 신규(크롤 안 된) → 최근 실패(크롤됐지만 오래된) → 성공 순
+                    .sort((a, b) => {
+                      const aNew = !a.lastCrawledAt, bNew = !b.lastCrawledAt
+                      if (aNew !== bNew) return aNew ? -1 : 1
+                      if (!a.lastCrawledAt && !b.lastCrawledAt) return a.name.localeCompare(b.name, 'ko')
+                      return new Date(a.lastCrawledAt!).getTime() - new Date(b.lastCrawledAt!).getTime()
+                    })
+                  const allChecked = filtered.length > 0 && filtered.every(s => crawlSelected.has(s.id))
+                  const someChecked = filtered.some(s => crawlSelected.has(s.id))
+                  return (
+                    <div className="flex-1 overflow-y-auto border rounded-lg min-h-0 max-h-96">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 sticky top-0">
+                          <tr>
+                            <th className="w-10 px-3 py-2 text-left">
+                              <input
+                                type="checkbox"
+                                className="rounded"
+                                checked={allChecked}
+                                ref={el => { if (el) el.indeterminate = someChecked && !allChecked }}
+                                onChange={() => {
+                                  if (allChecked) {
+                                    const next = new Set(crawlSelected)
+                                    filtered.forEach(s => next.delete(s.id))
+                                    setCrawlSelected(next)
+                                  } else {
+                                    const next = new Set(crawlSelected)
+                                    filtered.forEach(s => next.add(s.id))
+                                    setCrawlSelected(next)
+                                  }
+                                }}
+                              />
+                            </th>
+                            <th className="text-left px-2 py-2 font-medium text-gray-500">매장명</th>
+                            <th className="text-left px-2 py-2 font-medium text-gray-500 w-28">크롤링 일시</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {filtered.map(s => (
+                            <tr key={s.id} className="hover:bg-gray-50">
+                              <td className="px-3 py-2">
+                                <input
+                                  type="checkbox"
+                                  className="rounded"
+                                  checked={crawlSelected.has(s.id)}
+                                  onChange={(e) => {
+                                    const next = new Set(crawlSelected)
+                                    if (e.target.checked) { next.add(s.id) } else { next.delete(s.id) }
+                                    setCrawlSelected(next)
+                                  }}
+                                />
+                              </td>
+                              <td className="px-2 py-2 font-medium truncate max-w-0" style={{ maxWidth: '200px' }}>{s.name}</td>
+                              <td className="px-2 py-2 text-xs text-gray-400 whitespace-nowrap">
+                                {s.lastCrawledAt
+                                  ? new Date(s.lastCrawledAt).toLocaleDateString('ko-KR')
+                                  : <span className="text-amber-500">미크롤링</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })()}
                 <div className="shrink-0">
-                  <Button
-                    className="w-full"
-                    disabled={crawlSelected.size === 0}
-                    onClick={handleCrawlStart}
-                  >
+                  <Button className="w-full" disabled={crawlSelected.size === 0} onClick={handleCrawlStart}>
                     {crawlSelected.size > 0 ? `${crawlSelected.size}개 크롤링 시작` : '매장을 선택해주세요'}
                   </Button>
                 </div>

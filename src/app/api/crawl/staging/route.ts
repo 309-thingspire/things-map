@@ -11,9 +11,13 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') ?? 'PENDING'
+    const validStatuses = ['PENDING', 'APPROVED', 'UNREGISTERED', 'REJECTED']
+    const statusFilter = status === 'ALL'
+      ? undefined
+      : validStatuses.includes(status) ? status as 'PENDING' | 'APPROVED' | 'UNREGISTERED' | 'REJECTED' : 'PENDING'
 
     const items = await prisma.stagingStore.findMany({
-      where: { status: status as 'PENDING' | 'APPROVED' | 'REJECTED' },
+      where: statusFilter ? { status: statusFilter } : undefined,
       include: { crawlJob: { select: { platform: true, keyword: true } } },
       orderBy: { createdAt: 'desc' },
     })

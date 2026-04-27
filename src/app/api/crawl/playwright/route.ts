@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { crawlByStoreName } from '@/lib/crawl/playwright'
+import { autoApproveStaging } from '@/lib/crawl/autoApprove'
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,6 +50,15 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    // 자동 승인 처리
+    const approveStatus = await autoApproveStaging(staging.id, storeName, {
+      name: result.name,
+      phone: result.phone,
+      businessHours: result.businessHours,
+      tags: (result as { tags?: string[] }).tags,
+      menus: result.menus,
+    })
+
     await prisma.crawlJob.update({
       where: { id: job.id },
       data: { status: 'DONE', resultCount: 1 },
@@ -57,12 +67,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       data: {
         stagingId: staging.id,
+        approveStatus,
         preview: {
           name: result.name,
           address: result.address,
-          phone: result.phone,
-          businessHours: result.businessHours,
-          category: result.category,
           menus: result.menus,
         },
       },

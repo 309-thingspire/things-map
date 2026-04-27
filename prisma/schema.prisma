@@ -76,6 +76,8 @@ model Store {
   officeDistanceM Int?   @map("office_distance_m")   // 회사까지 직선 거리 (m)
   walkingMinutes  Int?   @map("walking_minutes")      // 도보 예상 시간 (분)
 
+  lastCrawledAt DateTime? @map("last_crawled_at")    // 마지막 크롤링 성공 일시
+
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -221,9 +223,10 @@ model StagingStore {
 }
 
 enum StagingStatus {
-  PENDING    // 검토 대기
-  APPROVED   // 승인 → Store 테이블로 이동
-  REJECTED   // 버림
+  PENDING      // 처리 대기
+  APPROVED     // 자동 승인 완료 — Store 업데이트됨
+  UNREGISTERED // 매장명 불일치 — DB에 없는 매장
+  REJECTED     // 처리 실패
 }
 
 // ────────────────────────────────────────

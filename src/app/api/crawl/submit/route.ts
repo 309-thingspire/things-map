@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sanitizeAddress } from '@/lib/sanitizeAddress'
+import { autoApproveStaging } from '@/lib/crawl/autoApprove'
 
 // POST /api/crawl/submit
 // 로컬 크롤링 결과를 서버로 업로드하여 stagingStore에 저장
@@ -69,5 +70,13 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  return NextResponse.json({ data: { stagingId: staging.id, name: result.name } }, { status: 201 })
+  const approveStatus = await autoApproveStaging(staging.id, storeName, {
+    name: result.name,
+    phone: result.phone,
+    businessHours: result.businessHours,
+    tags: result.tags,
+    menus: result.menus,
+  })
+
+  return NextResponse.json({ data: { stagingId: staging.id, name: result.name, approveStatus } }, { status: 201 })
 }

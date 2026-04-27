@@ -89,8 +89,8 @@ export default function HomePage() {
   const [hasUncategorizedStores, setHasUncategorizedStores] = useState(false)
   const cardScrollRef = useRef<HTMLDivElement>(null)
   const { center, zoom, moveTo } = useMap()
-  // mapCenter drives NaverMap display only — separate from center which drives useStores fetch
   const [mapCenter, setMapCenter] = useState(center)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   useEffect(() => {
     type DOEI = typeof DeviceOrientationEvent & { requestPermission?: () => Promise<string> }
     if (typeof (DeviceOrientationEvent as DOEI).requestPermission !== 'function') return
@@ -175,10 +175,24 @@ export default function HomePage() {
     setSelectedCategories((prev) => prev.includes(id) ? [] : [id])
   }
 
-  function resetMapPosition() {
-    moveTo(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, DEFAULT_ZOOM)
-    setMapCenter(DEFAULT_CENTER)
-    setMapMoved(false)
+  function goToMyLocation() {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setUserLocation(loc)
+        moveTo(loc.lat, loc.lng, DEFAULT_ZOOM)
+        setMapCenter(loc)
+        setMapMoved(false)
+      },
+      () => {
+        // 위치 권한 거부 시 기본 위치로
+        moveTo(DEFAULT_CENTER.lat, DEFAULT_CENTER.lng, DEFAULT_ZOOM)
+        setMapCenter(DEFAULT_CENTER)
+        setMapMoved(false)
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    )
   }
 
   return (
@@ -190,6 +204,7 @@ export default function HomePage() {
           center={mapCenter}
           zoom={zoom}
           selectedStore={selectedStore}
+          userLocation={userLocation}
           onStoreSelect={handleStoreSelect}
           onDeselect={() => setSelectedStore(null)}
           onStoreDetail={setDetailStoreId}
@@ -209,11 +224,11 @@ export default function HomePage() {
           {mapMoved && (
             <div className="flex justify-center pb-2 pointer-events-auto">
               <button
-                onClick={resetMapPosition}
+                onClick={goToMyLocation}
                 className="flex items-center gap-1.5 bg-white/95 backdrop-blur-sm text-gray-700 text-xs font-medium px-4 py-2 rounded-full shadow-md border border-gray-200 hover:shadow-lg transition-all"
               >
                 <LocateFixed size={13} />
-                위치 초기화
+                내 위치
               </button>
             </div>
           )}
@@ -418,6 +433,7 @@ export default function HomePage() {
 
       <StoreSlideOver
         storeId={detailStoreId}
+        userLocation={userLocation}
         onClose={() => setDetailStoreId(null)}
         onStoreSelect={(store) => {
           setDetailStoreId(store.id)
