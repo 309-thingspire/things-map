@@ -91,13 +91,27 @@ export default function AdminStagingPage() {
     const targets = items.REJECTED.map(i => i.id)
     if (targets.length === 0) return
     toast(`${targets.length}개 재시도 시작…`)
+    let approved = 0, unregistered = 0, failed = 0
     for (const id of targets) {
       setProc(id, true)
-      await fetch(`/api/crawl/staging/${id}`, { method: 'PATCH' })
+      try {
+        const res = await fetch(`/api/crawl/staging/${id}`, { method: 'PATCH' })
+        const json = await res.json()
+        if (res.ok) {
+          if (json.data?.status === 'APPROVED') approved++
+          else if (json.data?.status === 'UNREGISTERED') unregistered++
+          else failed++
+        } else {
+          failed++
+          toast(`오류: ${json.error ?? '알 수 없음'}`, 'error')
+        }
+      } catch {
+        failed++
+      }
       setProc(id, false)
     }
-    fetchItems()
-    toast('전체 재시도 완료')
+    await fetchItems()
+    toast(`완료 — 성공 ${approved} · 미등록 ${unregistered} · 실패 ${failed}`)
   }
 
   async function handleDelete(id: string) {
