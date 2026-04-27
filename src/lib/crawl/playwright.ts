@@ -80,14 +80,14 @@ export async function crawlByStoreName(storeName: string): Promise<PlaywrightRes
         await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 15000 })
         await randomDelay(1000, 2000)
 
-        // place.map.kakao.com 상세 페이지 카테고리 추가
-        const placeCate = await page.locator('.info_cate').first().textContent().catch(() => null)
-        if (placeCate?.trim()) {
-          const c = placeCate.trim()
-          if (!tags.includes(c)) tags.push(c)
+        // 태그: 홈 탭 매장정보 > 태그 섹션 (div.unit_hashtag a.link_detail)
+        const tagEls = await page.locator('div.unit_hashtag a.link_detail').all()
+        for (const el of tagEls) {
+          const t = (await el.textContent().catch(() => null))?.trim().replace(/^#/, '')
+          if (t && t.length > 0) tags.push(t)
         }
 
-        // 메뉴 탭 클릭 — href="#menuInfo" 또는 텍스트 "메뉴"
+        // 메뉴 탭 클릭
         const menuTabClicked = await (async () => {
           try {
             const byHref = page.locator('a.link_tab[href="#menuInfo"]')
@@ -107,19 +107,15 @@ export async function crawlByStoreName(storeName: string): Promise<PlaywrightRes
         })()
 
         if (menuTabClicked) {
-          // ul.list_goods li strong.tit_item — 확인된 실제 선택자
+          // ul.list_goods li — 확인된 실제 선택자
+          // 메뉴명: strong.tit_item / 가격: p.desc_item
           const menuItems = await page.locator('ul.list_goods li').all()
           for (const li of menuItems.slice(0, 40)) {
-            const menuName = await li.locator('strong.tit_item').textContent().catch(() => null)
-            if (!menuName?.trim()) continue
-
-            // 가격 탐색 — 카카오 플레이스는 대부분 가격 미제공
-            const priceText = await li.locator('[class*="price"], [class*="Price"], em, span').filter({
-              hasText: /[0-9,]{3,}원/
-            }).first().textContent().catch(() => null)
+            const menuName = (await li.locator('strong.tit_item').textContent().catch(() => null))?.trim()
+            if (!menuName) continue
+            const priceText = (await li.locator('p.desc_item').textContent().catch(() => null))?.trim()
             const price = priceText ? parseInt(priceText.replace(/[^0-9]/g, '')) || null : null
-
-            menus.push({ name: menuName.trim(), price })
+            menus.push({ name: menuName, price })
           }
         }
       } catch {
