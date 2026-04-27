@@ -37,6 +37,7 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
   const [isFavorited, setIsFavorited] = useState(false)
   const [favoriteCount, setFavoriteCount] = useState(0)
   const [tmapWalking, setTmapWalking] = useState<{ distanceM: number; walkingMinutes: number } | null>(null)
+  const [showAllMenus, setShowAllMenus] = useState(false)
 
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -94,6 +95,7 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
     setIsFavorited(false)
     setFavoriteCount(0)
     setTmapWalking(null)
+    setShowAllMenus(false)
 
     Promise.all([
       fetch(`/api/stores/${storeId}`).then((r) => r.ok ? r.json() : null),
@@ -304,8 +306,7 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
                     </p>
                   )
                 })()}
-                {store.phone && <p className="text-sm text-gray-600 mt-1">📞 {store.phone}</p>}
-                {store.businessHours && <p className="text-sm text-gray-600 mt-1">🕐 {store.businessHours}</p>}
+                {/* 전화·영업시간 — 추후 표시 예정 */}
 
                 <button
                   onClick={toggleFavorite}
@@ -324,20 +325,30 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
               {/* 메뉴 */}
               {store.menus.length > 0 && (
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">메뉴</h3>
-                  <div className="space-y-2">
-                    {store.menus.map((menu) => (
-                      <div key={menu.id} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-gray-800">{menu.name}</span>
-                          {menu.isRepresentative && <Badge className="text-xs">대표</Badge>}
+                  <h3 className="font-semibold text-gray-900 mb-2">메뉴</h3>
+                  <div className="divide-y divide-gray-50">
+                    {(showAllMenus ? store.menus : store.menus.slice(0, 5)).map((menu) => (
+                      <div key={menu.id} className="flex items-center justify-between py-2 text-sm">
+                        <div className="flex items-center gap-1.5 min-w-0 mr-4">
+                          <span className="text-gray-800 truncate">{menu.name}</span>
+                          {menu.isRepresentative && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">대표</Badge>
+                          )}
                         </div>
-                        {menu.price != null && (
-                          <span className="text-gray-600">{menu.price.toLocaleString()}원</span>
-                        )}
+                        <span className="shrink-0 text-gray-500 tabular-nums">
+                          {menu.price != null ? `${menu.price.toLocaleString()}원` : '—'}
+                        </span>
                       </div>
                     ))}
                   </div>
+                  {store.menus.length > 5 && (
+                    <button
+                      onClick={() => setShowAllMenus((v) => !v)}
+                      className="mt-2 w-full text-center text-sm text-gray-500 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                    >
+                      {showAllMenus ? '접기' : `더보기 (+${store.menus.length - 5}개)`}
+                    </button>
+                  )}
                 </div>
               )}
 
