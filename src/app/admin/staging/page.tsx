@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { CheckCircle, XCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { CheckCircle, XCircle, ChevronDown, ChevronUp, ExternalLink, Tag } from 'lucide-react'
 import { toast } from '@/components/ui/Toaster'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -28,6 +28,7 @@ interface StagingItem {
   businessHours: string | null
   lat: number | null
   lng: number | null
+  themeTags: string[]
   menus: { name: string; price: number | null }[] | null
   rawData: RawData
   status: 'PENDING' | 'APPROVED' | 'REJECTED'
@@ -56,10 +57,11 @@ export default function AdminStagingPage() {
     setProcessing(id)
     const item = items.find(i => i.id === id)
     const menus = item?.menus ?? item?.rawData?.menus ?? []
+    const themeTags = item?.themeTags?.length ? item.themeTags : (item?.rawData?.tags ?? [])
     const res = await fetch(`/api/crawl/staging/${id}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ menus }),
+      body: JSON.stringify({ menus, themeTags }),
     })
     const json = await res.json()
     if (res.ok) {
@@ -146,12 +148,19 @@ export default function AdminStagingPage() {
                       <div><span className="text-gray-400 mr-2">전화</span>{item.phone ?? raw?.phone ?? <span className="text-gray-300">없음</span>}</div>
                       <div><span className="text-gray-400 mr-2">좌표</span>{item.lat && item.lng ? `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}` : <span className="text-red-400">없음</span>}</div>
                       <div className="col-span-2"><span className="text-gray-400 mr-2">영업시간</span>{item.businessHours ?? raw?.businessHours ?? <span className="text-gray-300">없음</span>}</div>
-                      {(raw?.tags ?? []).length > 0 && (
-                        <div className="col-span-2">
-                          <span className="text-gray-400 mr-2">태그</span>
-                          <span className="text-gray-700">{(raw?.tags ?? []).join(', ')}</span>
-                        </div>
-                      )}
+                      {(() => {
+                        const allTags = [...new Set([...(item.themeTags ?? []), ...(raw?.tags ?? [])])]
+                        return allTags.length > 0 ? (
+                          <div className="col-span-2">
+                            <p className="text-gray-400 text-xs mb-1.5 flex items-center gap-1"><Tag size={11} /> 테마 태그</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {allTags.map(tag => (
+                                <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null
+                      })()}
                       <div>
                         <span className="text-gray-400 mr-2">카카오</span>
                         {raw?.kakaoUrl ? <a href={raw.kakaoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline flex items-center gap-1 inline-flex"><ExternalLink size={12} /> 열기</a> : <span className="text-gray-300">없음</span>}

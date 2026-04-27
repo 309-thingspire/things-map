@@ -19,22 +19,15 @@ function isNameMatch(keyword: string, resultName: string): boolean {
     s.replace(/\s+/g, '').replace(/[^가-힣a-zA-Z0-9]/g, '').toLowerCase()
   const kw = normalize(keyword)
   const rn = normalize(resultName)
-
-  // 완전 포함 또는 결과명이 키워드를 포함
   if (rn.includes(kw) || kw.includes(rn)) return true
-
-  // 공통 접두어 길이가 키워드의 70% 이상이면 통과
+  const kwCore = normalize(keyword.split(' ')[0])
+  if (kwCore.length >= 2 && rn.includes(kwCore)) return true
   let common = 0
   for (let i = 0; i < Math.min(kw.length, rn.length); i++) {
     if (kw[i] === rn[i]) common++
     else break
   }
-  if (common / kw.length >= 0.7) return true
-
-  // 키워드 첫 단어(점 이름)만 비교
-  const kwCore = normalize(keyword.split(' ')[0])
-  if (rn.includes(kwCore) && kwCore.length >= 2) return true
-
+  if (kw.length > 0 && common / kw.length >= 0.7) return true
   return false
 }
 
@@ -59,10 +52,9 @@ export async function crawlByStoreName(storeName: string): Promise<PlaywrightRes
     const firstResult = page.locator('.placelist .PlaceItem').first()
     if (!(await firstResult.isVisible())) return null
 
-    // 기본 정보 추출
     const name = (await firstResult.locator('[data-id="name"]').textContent().catch(() => storeName) ?? storeName).trim()
 
-    // 매장명 유사도 검증 — 불일치 시 null 반환
+    // 매장명 유사도 검증
     if (!isNameMatch(storeName, name)) return null
 
     const address = (await firstResult.locator('[data-id="address"]').textContent().catch(() => '') ?? '').trim()
@@ -81,67 +73,57 @@ export async function crawlByStoreName(storeName: string): Promise<PlaywrightRes
     const menus: { name: string; price: number | null }[] = []
     const tags: string[] = []
 
+    if (category) tags.push(category)
+
     if (detailUrl) {
       try {
-        await page.goto(detailUrl, { waitUntil: 'domcontentloaded', timeout: 15000 })
+        await page.goto(detailUrl, { waitUntil: 'networkidle', timeout: 15000 })
         await randomDelay(1000, 2000)
 
-        // 태그/키워드 수집 (홈 탭 — 기본 표시됨)
-        const tagEls = await page.locator('.tag_item, .list_tag .tag, .inner_tag, .tags_wrap .tag, .keyword_item').all()
-        for (const el of tagEls.slice(0, 20)) {
-          const t = (await el.textContent().catch(() => null))?.trim()
-          if (t && t.length > 0 && t.length < 30) tags.push(t)
+        // place.map.kakao.com 상세 페이지 카테고리 추가
+        const placeCate = await page.locator('.info_cate').first().textContent().catch(() => null)
+        if (placeCate?.trim()) {
+          const c = placeCate.trim()
+          if (!tags.includes(c)) tags.push(c)
         }
 
-        // 메뉴 탭으로 이동
-        const menuTabSelectors = [
-          'a[data-tab="menu"]',
-          '.tab_menu a[href*="menu"]',
-          '.wrap_tab a:has-text("메뉴")',
-          'button:has-text("메뉴")',
-          'a:has-text("메뉴")',
-        ]
-        let menuTabClicked = false
-        for (const sel of menuTabSelectors) {
+        // 메뉴 탭 클릭 — href="#menuInfo" 또는 텍스트 "메뉴"
+        const menuTabClicked = await (async () => {
           try {
-            const tab = page.locator(sel).first()
-            if (await tab.isVisible({ timeout: 2000 })) {
-              await tab.click()
+            const byHref = page.locator('a.link_tab[href="#menuInfo"]')
+            if (await byHref.count() > 0) {
+              await byHref.click()
               await randomDelay(800, 1500)
-              menuTabClicked = true
-              break
+              return true
             }
-          } catch { /* 다음 선택자 시도 */ }
-        }
-
-        if (menuTabClicked || true) {
-          // 메뉴 아이템 추출 — 여러 선택자 시도
-          const menuSelectors = [
-            { name: '.info_menu .loss_word', price: '.info_menu .price_menu' },
-            { name: '.list_menu .tit_item, .list_menu .name_item', price: '.list_menu .price_item' },
-            { name: '.tit_list', price: '.txt_price' },
-            { name: '.menu_name', price: '.menu_price' },
-            { name: '.txt_name', price: '.txt_price' },
-            { name: '.loss_word', price: '.price_menu' },
-          ]
-
-          for (const { name: nameSel, price: priceSel } of menuSelectors) {
-            const nameEls = await page.locator(nameSel).all()
-            if (nameEls.length === 0) continue
-
-            const priceEls = await page.locator(priceSel).all()
-            for (let i = 0; i < Math.min(nameEls.length, 30); i++) {
-              const menuName = (await nameEls[i].textContent().catch(() => null))?.trim()
-              if (!menuName || menuName.length === 0) continue
-              const priceText = priceEls[i] ? (await priceEls[i].textContent().catch(() => null)) : null
-              const price = priceText ? parseInt(priceText.replace(/[^0-9]/g, '')) || null : null
-              menus.push({ name: menuName, price })
+            const byText = page.locator('a.link_tab').filter({ hasText: '메뉴' }).first()
+            if (await byText.isVisible({ timeout: 2000 })) {
+              await byText.click()
+              await randomDelay(800, 1500)
+              return true
             }
-            if (menus.length > 0) break
+          } catch { /* ignore */ }
+          return false
+        })()
+
+        if (menuTabClicked) {
+          // ul.list_goods li strong.tit_item — 확인된 실제 선택자
+          const menuItems = await page.locator('ul.list_goods li').all()
+          for (const li of menuItems.slice(0, 40)) {
+            const menuName = await li.locator('strong.tit_item').textContent().catch(() => null)
+            if (!menuName?.trim()) continue
+
+            // 가격 탐색 — 카카오 플레이스는 대부분 가격 미제공
+            const priceText = await li.locator('[class*="price"], [class*="Price"], em, span').filter({
+              hasText: /[0-9,]{3,}원/
+            }).first().textContent().catch(() => null)
+            const price = priceText ? parseInt(priceText.replace(/[^0-9]/g, '')) || null : null
+
+            menus.push({ name: menuName.trim(), price })
           }
         }
       } catch {
-        // 상세 페이지 실패는 무시 — 기본 정보만 반환
+        // 상세 페이지 실패 시 기본 정보만 반환
       }
     }
 
@@ -151,7 +133,7 @@ export async function crawlByStoreName(storeName: string): Promise<PlaywrightRes
       phone,
       businessHours,
       category,
-      tags: [...new Set(tags)],
+      tags: [...new Set(tags)].filter(Boolean),
       menus,
       kakaoUrl,
     }

@@ -359,18 +359,18 @@ export default function AdminStoresPage() {
       {/* 상세 보기 모달 (읽기 전용) */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl w-full" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
-          <DialogHeader className="shrink-0">
-            <DialogTitle className="flex items-center gap-3">
-              <span>{viewStore?.name}</span>
+          <DialogHeader className="shrink-0 pr-6">
+            <DialogTitle>{viewStore?.name}</DialogTitle>
+            <div className="flex items-center gap-2 mt-1">
               {viewStore?.category && (
                 <Badge variant="outline" style={{ backgroundColor: (viewStore.category.color ?? '#888') + '20', borderColor: viewStore.category.color ?? undefined, color: viewStore.category.color ?? undefined }}>
                   {viewStore.category.name}
                 </Badge>
               )}
-              <Badge variant={viewStore?.status === 'ACTIVE' ? 'default' : 'secondary'} className="ml-auto">
+              <Badge variant={viewStore?.status === 'ACTIVE' ? 'default' : 'secondary'}>
                 {viewStore?.status === 'ACTIVE' ? '운영중' : '비활성'}
               </Badge>
-            </DialogTitle>
+            </div>
           </DialogHeader>
 
           {viewStore && (
