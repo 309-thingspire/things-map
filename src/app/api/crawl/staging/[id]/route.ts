@@ -36,6 +36,7 @@ export async function PATCH(_request: NextRequest, { params }: { params: Promise
 
     const raw = staging.rawData as {
       name?: string
+      address?: string | null
       phone?: string | null
       businessHours?: string | null
       tags?: string[]
@@ -49,6 +50,7 @@ export async function PATCH(_request: NextRequest, { params }: { params: Promise
 
     const status = await autoApproveStaging(id, keyword, {
       name: staging.name,
+      address: raw.address ?? staging.address,
       phone: raw.phone ?? staging.phone ?? null,
       businessHours: raw.businessHours ?? staging.businessHours ?? null,
       tags: raw.tags ?? staging.themeTags ?? [],

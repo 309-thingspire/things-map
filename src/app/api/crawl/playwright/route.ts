@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     // 자동 승인 처리
     const approveStatus = await autoApproveStaging(staging.id, storeName, {
       name: result.name,
+      address: result.address,
       phone: result.phone,
       businessHours: result.businessHours,
       tags: (result as { tags?: string[] }).tags,

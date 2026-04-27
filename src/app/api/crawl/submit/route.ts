@@ -72,6 +72,7 @@ export async function POST(request: NextRequest) {
 
   const approveStatus = await autoApproveStaging(staging.id, storeName, {
     name: result.name,
+    address: result.address,
     phone: result.phone,
     businessHours: result.businessHours,
     tags: result.tags,
