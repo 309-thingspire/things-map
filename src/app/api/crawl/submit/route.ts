@@ -12,6 +12,7 @@ interface CrawlResult {
   phone: string | null
   businessHours: string | null
   category: string | null
+  tags?: string[]
   lat: number | null
   lng: number | null
   kakaoUrl: string
@@ -63,6 +64,7 @@ export async function POST(request: NextRequest) {
       businessHours: result.businessHours ?? null,
       lat: result.lat ?? null,
       lng: result.lng ?? null,
+      themeTags: result.tags ?? [],
       menus: result.menus as object,
     },
   })

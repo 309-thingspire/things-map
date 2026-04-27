@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
         address: result.address,
         phone: result.phone ?? null,
         businessHours: result.businessHours ?? null,
+        themeTags: (result as { tags?: string[] }).tags ?? [],
         menus: result.menus as object,
       },
     })

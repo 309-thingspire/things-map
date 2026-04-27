@@ -24,6 +24,7 @@ export default function AdminStoresPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [viewStore, setViewStore] = useState<StoreRow | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
   const [editStore, setEditStore] = useState<StoreRow | null>(null)
   const [form, setForm] = useState({ name: '', address: '', lat: '', lng: '', phone: '', categoryId: '', themeTags: '', status: 'ACTIVE', naverUrl: '' })
   const [csvLoading, setCsvLoading] = useState(false)
@@ -88,9 +89,19 @@ export default function AdminStoresPage() {
     setDialogOpen(true)
   }
 
-  function openDetail(store: StoreRow) {
+  async function openDetail(store: StoreRow) {
     setViewStore(store)
     setDetailOpen(true)
+    setDetailLoading(true)
+    try {
+      const res = await fetch(`/api/stores/${store.id}`)
+      if (res.ok) {
+        const json = await res.json()
+        setViewStore({ ...store, ...json.data })
+      }
+    } finally {
+      setDetailLoading(false)
+    }
   }
 
   function openEdit(store: StoreRow) {
@@ -413,11 +424,12 @@ export default function AdminStoresPage() {
               </div>
 
               {/* 메뉴 */}
-              {viewStore.menus.length > 0 && (
+              {detailLoading && <p className="text-xs text-gray-400 flex items-center gap-1.5"><Loader2 size={12} className="animate-spin" /> 상세 정보 불러오는 중…</p>}
+              {!detailLoading && viewStore.menus?.length > 0 && (
                 <div>
-                  <p className="text-xs text-gray-400 mb-2">메뉴 ({viewStore.menus.length}개)</p>
+                  <p className="text-xs text-gray-400 mb-2">메뉴 ({viewStore.menus?.length}개)</p>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {viewStore.menus.map(m => (
+                    {viewStore.menus?.map(m => (
                       <div key={m.id} className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-lg text-sm">
                         <span className="truncate">{m.isRepresentative && <span className="text-amber-400 mr-1">★</span>}{m.name}</span>
                         <span className="text-gray-500 shrink-0 ml-2">{m.price != null ? `${m.price.toLocaleString()}원` : '-'}</span>

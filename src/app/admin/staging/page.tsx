@@ -12,6 +12,7 @@ interface RawData {
   phone?: string | null
   businessHours?: string | null
   category?: string | null
+  tags?: string[]
   lat?: number | null
   lng?: number | null
   kakaoUrl?: string
@@ -145,6 +146,12 @@ export default function AdminStagingPage() {
                       <div><span className="text-gray-400 mr-2">전화</span>{item.phone ?? raw?.phone ?? <span className="text-gray-300">없음</span>}</div>
                       <div><span className="text-gray-400 mr-2">좌표</span>{item.lat && item.lng ? `${item.lat.toFixed(5)}, ${item.lng.toFixed(5)}` : <span className="text-red-400">없음</span>}</div>
                       <div className="col-span-2"><span className="text-gray-400 mr-2">영업시간</span>{item.businessHours ?? raw?.businessHours ?? <span className="text-gray-300">없음</span>}</div>
+                      {(raw?.tags ?? []).length > 0 && (
+                        <div className="col-span-2">
+                          <span className="text-gray-400 mr-2">태그</span>
+                          <span className="text-gray-700">{(raw?.tags ?? []).join(', ')}</span>
+                        </div>
+                      )}
                       <div>
                         <span className="text-gray-400 mr-2">카카오</span>
                         {raw?.kakaoUrl ? <a href={raw.kakaoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline flex items-center gap-1 inline-flex"><ExternalLink size={12} /> 열기</a> : <span className="text-gray-300">없음</span>}
