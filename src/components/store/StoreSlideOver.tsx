@@ -41,6 +41,7 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
 
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ startY: number; startPx: number } | null>(null)
   const snapRef = useRef<'partial' | 'full'>('partial')
   const isDesktopRef = useRef(false)
@@ -153,19 +154,35 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
     closeTimerRef.current = setTimeout(onClose, 380)
   }
 
-  function onHandleTouchStart(e: React.TouchEvent) {
-    if (isDesktopRef.current) return
+  function initDrag(clientY: number) {
+    if (isDesktopRef.current) return false
     const startPx = snapRef.current === 'full' ? 0 : getPartialPx()
-    dragRef.current = { startY: e.touches[0].clientY, startPx }
+    dragRef.current = { startY: clientY, startPx }
     if (panelRef.current) {
       panelRef.current.style.transition = 'none'
       panelRef.current.style.transform = `translateY(${startPx}px)`
     }
+    return true
+  }
+
+  function onHandleTouchStart(e: React.TouchEvent) {
+    initDrag(e.touches[0].clientY)
+  }
+
+  // 전체 패널 터치 — partial 모드이거나 full 모드에서 스크롤 최상단일 때만 드래그
+  function onPanelTouchStart(e: React.TouchEvent) {
+    if (isDesktopRef.current) return
+    // 버튼·링크·인풋 위에서는 드래그 시작 안 함
+    if ((e.target as HTMLElement).closest('button, a, input, textarea, select')) return
+    // full 모드: 스크롤이 최상단이 아니면 스크롤에 양보
+    if (snapRef.current === 'full' && (scrollRef.current?.scrollTop ?? 0) > 4) return
+    initDrag(e.touches[0].clientY)
   }
 
   function onHandleTouchMove(e: React.TouchEvent) {
     if (!dragRef.current || !panelRef.current) return
     const deltaY = e.touches[0].clientY - dragRef.current.startY
+    if (Math.abs(deltaY) < 4) return  // 미세한 탭은 무시
     const newY = Math.max(0, dragRef.current.startPx + deltaY)
     panelRef.current.style.transform = `translateY(${newY}px)`
   }
@@ -181,21 +198,21 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
     const partialPx = getPartialPx()
 
     if (endY < vh * 0.5) {
-      // Panel covers >50% of screen → full
+      // 화면 절반 이상 → full
       snapRef.current = 'full'
       setSnapPoint('full')
       moveTo(0, true)
-    } else if (prevSnap === 'full' && deltaY > 20) {
-      // Full → dragging down → partial
+    } else if (prevSnap === 'full' && deltaY > 8) {
+      // full → 조금만 내려도 partial로 (8px)
       snapRef.current = 'partial'
       setSnapPoint('partial')
       moveTo(partialPx, true)
     } else if (prevSnap === 'partial' && deltaY > 60) {
-      // Partial → dragging down → close
+      // partial → 아래로 많이 → 닫기
       moveTo(panelRef.current.offsetHeight, true)
       handleClose()
     } else {
-      // Snap back to current position
+      // 현재 위치로 복귀
       moveTo(prevSnap === 'full' ? 0 : partialPx, true)
     }
   }
@@ -227,6 +244,9 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
           ${isMobileFull ? '' : 'rounded-t-2xl border-t border-gray-200'}
           ${desktopClass}
         `}
+        onTouchStart={onPanelTouchStart}
+        onTouchMove={onHandleTouchMove}
+        onTouchEnd={onHandleTouchEnd}
       >
         {/* 드래그 핸들 (모바일 전용) */}
         <div
@@ -268,7 +288,7 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
         </div>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
           {loading ? (
             <div className="flex items-center justify-center h-48 text-gray-400 text-sm">불러오는 중...</div>
           ) : !store ? (
@@ -285,9 +305,6 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
                   ) : (
                     <Badge variant="outline" className="text-gray-300">미지정</Badge>
                   )}
-                  {store.themeTags.map((tag) => (
-                    <Badge key={tag} variant="outline">{tag}</Badge>
-                  ))}
                 </div>
 
                 <div className="flex items-center gap-2 min-w-0 mt-1">
