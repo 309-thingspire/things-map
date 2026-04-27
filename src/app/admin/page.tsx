@@ -34,6 +34,15 @@ interface ChatStat {
   dailyTrend: DauPoint[]
   topStores: { storeId: string; name: string; category: { name: string; color: string | null } | null; count: number }[]
 }
+interface ChatKeyword {
+  word: string; count: number
+}
+interface ChatKeywords {
+  keywords: ChatKeyword[]
+  totalMessages: number
+  recentMessages: number
+  trending: { word: string; recentCnt: number; totalCnt: number; ratio: number }[]
+}
 interface CategoryStat {
   id: string; name: string; color: string | null; storeCount: number; viewCount: number
 }
@@ -79,10 +88,12 @@ export default function AdminDashboard() {
   const [userSortDir, setUserSortDir] = useState<'asc' | 'desc'>('desc')
   const [preferences, setPreferences] = useState<UserPreference[]>([])
   const [trendPeriod, setTrendPeriod] = useState<7 | 30>(7)
+  const [chatKeywords, setChatKeywords] = useState<ChatKeywords | null>(null)
 
   useEffect(() => {
     fetch('/api/admin/stats').then(r => r.json()).then(j => { setStats(j.data); setLoading(false) })
     fetch('/api/admin/user-preferences').then(r => r.json()).then(j => { if (j.data) setPreferences(j.data) })
+    fetch('/api/admin/chat-keywords').then(r => r.json()).then(j => { if (j.data) setChatKeywords(j.data) })
   }, [])
 
   function toggleUserSort(key: UserSortKey) {
@@ -293,8 +304,9 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+
           {/* 30일 챗봇 트렌드 */}
-          <div className="px-5 pt-4 pb-2">
+          <div className="px-5 pt-4 pb-3 border-b">
             <p className="text-xs text-gray-400 mb-2">최근 30일 대화량</p>
             <div className="flex items-end gap-0.5 h-10">
               {chatStats.dailyTrend.map((d, i) => {
@@ -310,28 +322,91 @@ export default function AdminDashboard() {
               })}
             </div>
           </div>
-          {/* 많이 추천된 매장 */}
-          {chatStats.topStores.length > 0 ? (
-            <div className="px-5 py-3 border-t">
-              <p className="text-xs text-gray-400 mb-2">가장 많이 추천된 매장</p>
-              <div className="space-y-1.5">
-                {chatStats.topStores.map((s, i) => (
-                  <div key={s.storeId} className="flex items-center gap-2">
-                    <span className="text-xs text-gray-400 w-3">{i + 1}</span>
-                    {s.category && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white shrink-0"
-                        style={{ background: s.category.color ?? '#9ca3af' }}>
-                        {s.category.name}
-                      </span>
-                    )}
-                    <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
-                    <span className="text-xs font-medium text-purple-500">{s.count}회</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+
+          {chatStats.totalMessages === 0 ? (
+            <p className="px-5 py-6 text-xs text-gray-400 text-center">아직 대화 데이터가 없습니다.</p>
           ) : (
-            <p className="px-5 py-4 text-xs text-gray-400">아직 대화 데이터가 없습니다.</p>
+            <>
+              {/* 사용자 키워드 분석 */}
+              {chatKeywords && chatKeywords.keywords.length > 0 && (
+                <div className="px-5 py-4 border-b">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-medium text-gray-600">사용자 입력 키워드</p>
+                    <p className="text-xs text-gray-400">{chatKeywords.totalMessages}개 메시지 분석</p>
+                  </div>
+                  {/* 키워드 클라우드 */}
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {chatKeywords.keywords.slice(0, 25).map(({ word, count }) => {
+                      const maxCount = chatKeywords.keywords[0]?.count ?? 1
+                      const ratio = count / maxCount
+                      const size = ratio > 0.7 ? 'text-base font-bold' : ratio > 0.4 ? 'text-sm font-semibold' : 'text-xs font-medium'
+                      const opacity = ratio > 0.6 ? 'opacity-100' : ratio > 0.3 ? 'opacity-75' : 'opacity-50'
+                      return (
+                        <span
+                          key={word}
+                          className={`${size} ${opacity} px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 cursor-default`}
+                          title={`${count}번 언급`}
+                        >
+                          {word}
+                          <span className="text-[10px] text-purple-400 ml-1">{count}</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                  {/* Top 5 바 차트 */}
+                  <div className="space-y-1.5">
+                    {chatKeywords.keywords.slice(0, 7).map(({ word, count }) => {
+                      const maxCount = chatKeywords.keywords[0]?.count ?? 1
+                      return (
+                        <div key={word} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-700 w-16 truncate text-right">{word}</span>
+                          <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-purple-400 rounded-full transition-all"
+                              style={{ width: `${Math.round((count / maxCount) * 100)}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-500 w-6 text-right">{count}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {/* 최근 7일 급상승 */}
+                  {chatKeywords.trending.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-50">
+                      <p className="text-xs text-gray-400 mb-1.5">최근 7일 자주 쓰인 키워드</p>
+                      <div className="flex flex-wrap gap-1">
+                        {chatKeywords.trending.map(({ word, recentCnt }) => (
+                          <span key={word} className="text-xs px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">
+                            {word} <span className="text-amber-400">{recentCnt}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 많이 추천된 매장 */}
+              {chatStats.topStores.length > 0 && (
+                <div className="px-5 py-3">
+                  <p className="text-xs text-gray-400 mb-2">가장 많이 추천된 매장</p>
+                  <div className="space-y-1.5">
+                    {chatStats.topStores.map((s, i) => (
+                      <div key={s.storeId} className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-3">{i + 1}</span>
+                        {s.category && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white shrink-0"
+                            style={{ background: s.category.color ?? '#9ca3af' }}>
+                            {s.category.name}
+                          </span>
+                        )}
+                        <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                        <span className="text-xs font-medium text-purple-500">{s.count}회</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
