@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Copy, Check, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,17 +9,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { toast } from '@/components/ui/Toaster'
 import type { User } from '@/types'
 
+const TEAMS = ['탄소플랫폼', '에너지플랫폼', '경영지원', 'CTO팀', '기타']
+
+type SortKey = 'name' | 'team'
+
 interface EditState {
   id: string
   team: string
+  teamCustom: string   // '기타' 선택 시 직접 입력값
   role: string
 }
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [sortKey, setSortKey] = useState<SortKey>('name')
   const [createOpen, setCreateOpen] = useState(false)
   const [newUser, setNewUser] = useState({ name: '', team: '', role: 'USER' })
+  const [newTeamCustom, setNewTeamCustom] = useState('')
   const [createdCode, setCreatedCode] = useState<{ name: string; code: string } | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [editState, setEditState] = useState<EditState | null>(null)
@@ -42,16 +49,48 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers() }, [])
 
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      if (sortKey === 'team') {
+        const teamCmp = a.team.localeCompare(b.team, 'ko')
+        return teamCmp !== 0 ? teamCmp : a.name.localeCompare(b.name, 'ko')
+      }
+      return a.name.localeCompare(b.name, 'ko')
+    })
+  }, [users, sortKey])
+
+  /** TEAMS 목록에 없는 팀은 '기타'로 취급 */
+  function resolveTeamSelect(team: string) {
+    return TEAMS.includes(team) ? team : '기타'
+  }
+
+  function openEdit(user: User) {
+    const sel = resolveTeamSelect(user.team)
+    setEditState({
+      id: user.id,
+      team: sel,
+      teamCustom: sel === '기타' ? user.team : '',
+      role: user.role,
+    })
+  }
+
+  function effectiveTeam(state: EditState) {
+    return state.team === '기타' ? state.teamCustom.trim() : state.team
+  }
+
   async function handleCreate() {
+    const team = newUser.team === '기타' ? newTeamCustom.trim() : newUser.team
+    if (!newUser.name || !team) return
     const res = await fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newUser),
+      body: JSON.stringify({ ...newUser, team }),
     })
     if (res.ok) {
       const json = await res.json()
       setCreatedCode({ name: json.data.name, code: json.data.approvalCode })
       setNewUser({ name: '', team: '', role: 'USER' })
+      setNewTeamCustom('')
       setCreateOpen(false)
       fetchUsers()
     }
@@ -66,17 +105,15 @@ export default function AdminUsersPage() {
     fetchUsers()
   }
 
-  function openEdit(user: User) {
-    setEditState({ id: user.id, team: user.team, role: user.role })
-  }
-
   async function handleSaveEdit() {
     if (!editState) return
+    const team = effectiveTeam(editState)
+    if (!team) { toast('팀을 입력해주세요.', 'error'); return }
     setSaving(true)
     const res = await fetch(`/api/users/${editState.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ team: editState.team, role: editState.role }),
+      body: JSON.stringify({ team, role: editState.role }),
     })
     setSaving(false)
     if (res.ok) {
@@ -105,6 +142,21 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      {/* 정렬 탭 */}
+      <div className="flex gap-1 mb-3 bg-gray-100 p-1 rounded-lg w-fit">
+        {(['name', 'team'] as SortKey[]).map((key) => (
+          <button
+            key={key}
+            onClick={() => setSortKey(key)}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              sortKey === key ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {key === 'name' ? '이름순' : '팀별'}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <p className="text-gray-400">불러오는 중...</p>
       ) : (
@@ -122,7 +174,7 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {users.map((user) => (
+              {sortedUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium">{user.name}</td>
                   <td className="px-4 py-3 text-gray-500">{user.team}</td>
@@ -182,7 +234,23 @@ export default function AdminUsersPage() {
           </DialogHeader>
           <div className="space-y-3">
             <Input placeholder="이름" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
-            <Input placeholder="팀 (예: 개발팀)" value={newUser.team} onChange={(e) => setNewUser({ ...newUser, team: e.target.value })} />
+            <div className="space-y-2">
+              <select
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                value={newUser.team}
+                onChange={(e) => setNewUser({ ...newUser, team: e.target.value })}
+              >
+                <option value="" disabled>팀 선택</option>
+                {TEAMS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+              {newUser.team === '기타' && (
+                <Input
+                  placeholder="팀명 직접 입력"
+                  value={newTeamCustom}
+                  onChange={(e) => setNewTeamCustom(e.target.value)}
+                />
+              )}
+            </div>
             <select
               className="w-full border rounded-md px-3 py-2 text-sm"
               value={newUser.role}
@@ -204,13 +272,22 @@ export default function AdminUsersPage() {
           </DialogHeader>
           {editState && (
             <div className="space-y-4">
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700">팀</label>
-                <Input
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
                   value={editState.team}
-                  onChange={(e) => setEditState({ ...editState, team: e.target.value })}
-                  placeholder="팀명 입력"
-                />
+                  onChange={(e) => setEditState({ ...editState, team: e.target.value, teamCustom: '' })}
+                >
+                  {TEAMS.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                {editState.team === '기타' && (
+                  <Input
+                    placeholder="팀명 직접 입력"
+                    value={editState.teamCustom}
+                    onChange={(e) => setEditState({ ...editState, teamCustom: e.target.value })}
+                  />
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-gray-700">역할</label>
