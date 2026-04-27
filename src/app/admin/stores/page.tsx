@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Trash2, ChevronUp, ChevronDown, ChevronsUpDown, ExternalLink, Terminal } from 'lucide-react'
+import { Trash2, ChevronUp, ChevronDown, ChevronsUpDown, ExternalLink, Terminal, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { toast } from '@/components/ui/Toaster'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +27,12 @@ export default function AdminStoresPage() {
   const [csvLoading, setCsvLoading] = useState(false)
   const [importResult, setImportResult] = useState<{ success: string[]; failed: string[] } | null>(null)
   const csvInputRef = useRef<HTMLInputElement>(null)
+  const isCrawlEnabled = process.env.NEXT_PUBLIC_CRAWL_ENABLED === 'true'
+  const [crawlOpen, setCrawlOpen] = useState(false)
+  const [crawlInput, setCrawlInput] = useState('')
+  const [crawlLoading, setCrawlLoading] = useState(false)
+  type CrawlResult = { ok: true; stagingId: string; name: string; address: string; menus: number } | { ok: false; error: string }
+  const [crawlResult, setCrawlResult] = useState<CrawlResult | null>(null)
   type SortField = 'name' | 'category' | 'walkingMinutes' | 'rating' | 'status'
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -140,6 +146,32 @@ export default function AdminStoresPage() {
   }
 
 
+  async function handleCrawl() {
+    if (!crawlInput.trim()) return
+    setCrawlLoading(true)
+    setCrawlResult(null)
+    try {
+      const res = await fetch('/api/crawl/playwright', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeName: crawlInput.trim() }),
+      })
+      const json = await res.json()
+      if (res.ok) {
+        const p = json.data.preview
+        setCrawlResult({ ok: true, stagingId: json.data.stagingId, name: p.name, address: p.address, menus: p.menus?.length ?? 0 })
+        setCrawlInput('')
+        toast(`크롤링 완료 — ${p.name}`)
+      } else {
+        setCrawlResult({ ok: false, error: json.error ?? '크롤링 실패' })
+      }
+    } catch (err) {
+      setCrawlResult({ ok: false, error: String(err) })
+    } finally {
+      setCrawlLoading(false)
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm('삭제하시겠습니까?')) return
     const res = await fetch(`/api/stores/${id}`, { method: 'DELETE' })
@@ -194,16 +226,17 @@ export default function AdminStoresPage() {
             {csvLoading ? '가져오는 중...' : '📥 CSV 가져오기'}
           </Button>
           <Button variant="outline" onClick={handleExportCsv}>📤 CSV 내보내기</Button>
-          <a
-            href="http://localhost:3000/admin/stores"
-            target="_blank"
-            rel="noopener noreferrer"
-            title="로컬에서 메뉴 크롤링 실행"
-          >
-            <Button variant="outline" size="icon">
+          {isCrawlEnabled ? (
+            <Button variant="outline" size="icon" title="메뉴 크롤링" onClick={() => { setCrawlOpen(true); setCrawlResult(null) }}>
               <Terminal size={15} />
             </Button>
-          </a>
+          ) : (
+            <a href="http://localhost:3000/admin/stores" target="_blank" rel="noopener noreferrer" title="로컬에서 크롤링 실행">
+              <Button variant="outline" size="icon">
+                <Terminal size={15} />
+              </Button>
+            </a>
+          )}
           <Button onClick={openCreate}>+ 매장 추가</Button>
         </div>
       </div>
@@ -352,6 +385,48 @@ export default function AdminStoresPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 크롤링 모달 — 로컬 개발 환경에서만 표시 */}
+      {isCrawlEnabled && (
+        <Dialog open={crawlOpen} onOpenChange={setCrawlOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Terminal size={16} /> 메뉴 크롤링</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">매장명을 입력하면 카카오 지도에서 정보를 크롤링해 스테이징에 저장합니다.</p>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="매장명 (예: 맥도날드 용산점)"
+                  value={crawlInput}
+                  onChange={(e) => setCrawlInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && !crawlLoading && handleCrawl()}
+                  disabled={crawlLoading}
+                />
+                <Button onClick={handleCrawl} disabled={crawlLoading || !crawlInput.trim()} className="shrink-0">
+                  {crawlLoading ? <Loader2 size={15} className="animate-spin" /> : '실행'}
+                </Button>
+              </div>
+
+              {crawlResult && (
+                crawlResult.ok ? (
+                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm space-y-1">
+                    <p className="flex items-center gap-1.5 font-medium text-green-800"><CheckCircle size={14} /> 크롤링 성공</p>
+                    <p className="text-gray-700">{crawlResult.name}</p>
+                    <p className="text-gray-500 text-xs">{crawlResult.address}</p>
+                    <p className="text-gray-500 text-xs">메뉴 {crawlResult.menus}개 · staging ID: {crawlResult.stagingId.slice(0, 8)}…</p>
+                    <a href="/admin/staging" className="text-blue-500 text-xs hover:underline">→ 스테이징에서 확인</a>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm flex items-start gap-1.5 text-red-700">
+                    <XCircle size={14} className="mt-0.5 shrink-0" /> {crawlResult.error}
+                  </div>
+                )
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

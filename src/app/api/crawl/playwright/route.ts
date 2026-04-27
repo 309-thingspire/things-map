@@ -5,6 +5,10 @@ import { crawlByStoreName } from '@/lib/crawl/playwright'
 
 export async function POST(request: NextRequest) {
   try {
+    if (process.env.NODE_ENV !== 'development') {
+      return NextResponse.json({ error: '로컬 환경에서만 사용 가능합니다.' }, { status: 403 })
+    }
+
     const session = await getSession()
     if (!session || session.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
