@@ -29,10 +29,12 @@ export default function AdminStoresPage() {
   const csvInputRef = useRef<HTMLInputElement>(null)
   const isCrawlEnabled = process.env.NEXT_PUBLIC_CRAWL_ENABLED === 'true'
   const [crawlOpen, setCrawlOpen] = useState(false)
-  const [crawlInput, setCrawlInput] = useState('')
-  const [crawlLoading, setCrawlLoading] = useState(false)
-  type CrawlResult = { ok: true; stagingId: string; name: string; address: string; menus: number } | { ok: false; error: string }
-  const [crawlResult, setCrawlResult] = useState<CrawlResult | null>(null)
+  const [crawlFilter, setCrawlFilter] = useState('')
+  const [crawlSelected, setCrawlSelected] = useState<Set<string>>(new Set())
+  const [crawlRunning, setCrawlRunning] = useState(false)
+  const crawlAbortRef = useRef(false)
+  type CrawlItemResult = { storeName: string; ok: boolean; name?: string; stagingId?: string; error?: string }
+  const [crawlProgress, setCrawlProgress] = useState<{ done: number; total: number; results: CrawlItemResult[] } | null>(null)
   type SortField = 'name' | 'category' | 'walkingMinutes' | 'rating' | 'status'
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
@@ -146,30 +148,37 @@ export default function AdminStoresPage() {
   }
 
 
-  async function handleCrawl() {
-    if (!crawlInput.trim()) return
-    setCrawlLoading(true)
-    setCrawlResult(null)
-    try {
-      const res = await fetch('/api/crawl/playwright', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ storeName: crawlInput.trim() }),
-      })
-      const json = await res.json()
-      if (res.ok) {
-        const p = json.data.preview
-        setCrawlResult({ ok: true, stagingId: json.data.stagingId, name: p.name, address: p.address, menus: p.menus?.length ?? 0 })
-        setCrawlInput('')
-        toast(`크롤링 완료 — ${p.name}`)
-      } else {
-        setCrawlResult({ ok: false, error: json.error ?? '크롤링 실패' })
+  async function handleCrawlStart() {
+    const targets = stores.filter(s => crawlSelected.has(s.id)).map(s => s.name)
+    if (targets.length === 0) return
+    setCrawlRunning(true)
+    crawlAbortRef.current = false
+    setCrawlProgress({ done: 0, total: targets.length, results: [] })
+
+    for (let i = 0; i < targets.length; i++) {
+      if (crawlAbortRef.current) break
+      const storeName = targets[i]
+      try {
+        const res = await fetch('/api/crawl/playwright', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storeName }),
+        })
+        const json = await res.json()
+        if (res.ok) {
+          setCrawlProgress(p => p ? { ...p, done: i + 1, results: [...p.results, { storeName, ok: true, name: json.data.preview.name, stagingId: json.data.stagingId }] } : p)
+        } else {
+          setCrawlProgress(p => p ? { ...p, done: i + 1, results: [...p.results, { storeName, ok: false, error: json.error }] } : p)
+        }
+      } catch (err) {
+        setCrawlProgress(p => p ? { ...p, done: i + 1, results: [...p.results, { storeName, ok: false, error: String(err) }] } : p)
       }
-    } catch (err) {
-      setCrawlResult({ ok: false, error: String(err) })
-    } finally {
-      setCrawlLoading(false)
+      // 봇 탐지 방지 딜레이
+      if (i < targets.length - 1 && !crawlAbortRef.current) {
+        await new Promise(r => setTimeout(r, 2000 + Math.random() * 1500))
+      }
     }
+    setCrawlRunning(false)
   }
 
   async function handleDelete(id: string) {
@@ -227,7 +236,7 @@ export default function AdminStoresPage() {
           </Button>
           <Button variant="outline" onClick={handleExportCsv}>📤 CSV 내보내기</Button>
           {isCrawlEnabled ? (
-            <Button variant="outline" size="icon" title="메뉴 크롤링" onClick={() => { setCrawlOpen(true); setCrawlResult(null) }}>
+            <Button variant="outline" size="icon" title="메뉴 크롤링" onClick={() => { setCrawlOpen(true); setCrawlProgress(null); setCrawlSelected(new Set(stores.map(s => s.id))); setCrawlFilter('') }}>
               <Terminal size={15} />
             </Button>
           ) : (
@@ -388,42 +397,102 @@ export default function AdminStoresPage() {
 
       {/* 크롤링 모달 — 로컬 개발 환경에서만 표시 */}
       {isCrawlEnabled && (
-        <Dialog open={crawlOpen} onOpenChange={setCrawlOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
+        <Dialog open={crawlOpen} onOpenChange={(open) => { if (!crawlRunning) { setCrawlOpen(open); if (!open) { setCrawlProgress(null); setCrawlSelected(new Set()); setCrawlFilter('') } } }}>
+          <DialogContent className="max-w-lg flex flex-col" style={{ maxHeight: '85vh' }}>
+            <DialogHeader className="shrink-0">
               <DialogTitle className="flex items-center gap-2"><Terminal size={16} /> 메뉴 크롤링</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3">
-              <p className="text-xs text-gray-500">매장명을 입력하면 카카오 지도에서 정보를 크롤링해 스테이징에 저장합니다.</p>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="매장명 (예: 맥도날드 용산점)"
-                  value={crawlInput}
-                  onChange={(e) => setCrawlInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && !crawlLoading && handleCrawl()}
-                  disabled={crawlLoading}
-                />
-                <Button onClick={handleCrawl} disabled={crawlLoading || !crawlInput.trim()} className="shrink-0">
-                  {crawlLoading ? <Loader2 size={15} className="animate-spin" /> : '실행'}
-                </Button>
-              </div>
 
-              {crawlResult && (
-                crawlResult.ok ? (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg text-sm space-y-1">
-                    <p className="flex items-center gap-1.5 font-medium text-green-800"><CheckCircle size={14} /> 크롤링 성공</p>
-                    <p className="text-gray-700">{crawlResult.name}</p>
-                    <p className="text-gray-500 text-xs">{crawlResult.address}</p>
-                    <p className="text-gray-500 text-xs">메뉴 {crawlResult.menus}개 · staging ID: {crawlResult.stagingId.slice(0, 8)}…</p>
-                    <a href="/admin/staging" className="text-blue-500 text-xs hover:underline">→ 스테이징에서 확인</a>
+            {/* 진행 중 화면 */}
+            {crawlProgress ? (
+              <div className="flex flex-col gap-3 min-h-0">
+                {/* 진행률 */}
+                <div className="shrink-0">
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>{crawlRunning ? `진행 중…` : '완료'}</span>
+                    <span>{crawlProgress.done} / {crawlProgress.total}</span>
                   </div>
-                ) : (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm flex items-start gap-1.5 text-red-700">
-                    <XCircle size={14} className="mt-0.5 shrink-0" /> {crawlResult.error}
+                  <div className="w-full bg-gray-100 rounded-full h-1.5">
+                    <div
+                      className="bg-blue-500 h-1.5 rounded-full transition-all"
+                      style={{ width: `${(crawlProgress.done / crawlProgress.total) * 100}%` }}
+                    />
                   </div>
-                )
-              )}
-            </div>
+                </div>
+                {/* 결과 목록 */}
+                <div className="flex-1 overflow-y-auto space-y-1 min-h-0 max-h-96">
+                  {crawlProgress.results.map((r, i) => (
+                    <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${r.ok ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-700'}`}>
+                      {r.ok ? <CheckCircle size={13} className="shrink-0" /> : <XCircle size={13} className="shrink-0" />}
+                      <span className="font-medium truncate">{r.storeName}</span>
+                      {r.ok ? <span className="text-xs text-green-600 ml-auto shrink-0">→ {r.name}</span> : <span className="text-xs ml-auto shrink-0 truncate max-w-32">{r.error}</span>}
+                    </div>
+                  ))}
+                  {crawlRunning && crawlProgress.done < crawlProgress.total && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500">
+                      <Loader2 size={13} className="animate-spin shrink-0" />
+                      <span className="truncate">{stores.filter(s => crawlSelected.has(s.id))[crawlProgress.done]?.name ?? '…'}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="shrink-0 flex gap-2">
+                  {crawlRunning ? (
+                    <Button variant="outline" className="flex-1" onClick={() => { crawlAbortRef.current = true }}>중단</Button>
+                  ) : (
+                    <>
+                      <a href="/admin/staging" className="flex-1">
+                        <Button variant="outline" className="w-full">스테이징에서 확인</Button>
+                      </a>
+                      <Button className="flex-1" onClick={() => { setCrawlProgress(null); setCrawlSelected(new Set()); setCrawlFilter('') }}>다시 선택</Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* 선택 화면 */
+              <div className="flex flex-col gap-3 min-h-0">
+                <div className="shrink-0 flex gap-2">
+                  <Input
+                    placeholder="매장 검색…"
+                    value={crawlFilter}
+                    onChange={(e) => setCrawlFilter(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setCrawlSelected(new Set(stores.map(s => s.id)))}>전체 선택</Button>
+                  <Button variant="outline" size="sm" className="shrink-0" onClick={() => setCrawlSelected(new Set())}>해제</Button>
+                </div>
+                <div className="flex-1 overflow-y-auto border rounded-lg divide-y min-h-0 max-h-96">
+                  {stores
+                    .filter(s => !crawlFilter || s.name.includes(crawlFilter))
+                    .map(s => (
+                      <label key={s.id} className="flex items-center gap-3 px-3 py-2 hover:bg-gray-50 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          className="rounded"
+                          checked={crawlSelected.has(s.id)}
+                          onChange={(e) => {
+                            const next = new Set(crawlSelected)
+                            if (e.target.checked) next.add(s.id)
+                            else next.delete(s.id)
+                            setCrawlSelected(next)
+                          }}
+                        />
+                        <span className="flex-1 truncate font-medium">{s.name}</span>
+                        <span className="text-xs text-gray-400 shrink-0">{s.category?.name ?? '미분류'}</span>
+                      </label>
+                    ))}
+                </div>
+                <div className="shrink-0">
+                  <Button
+                    className="w-full"
+                    disabled={crawlSelected.size === 0}
+                    onClick={handleCrawlStart}
+                  >
+                    {crawlSelected.size > 0 ? `${crawlSelected.size}개 크롤링 시작` : '매장을 선택해주세요'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       )}
