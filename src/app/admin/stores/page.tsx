@@ -22,6 +22,8 @@ export default function AdminStoresPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [viewStore, setViewStore] = useState<StoreRow | null>(null)
   const [editStore, setEditStore] = useState<StoreRow | null>(null)
   const [form, setForm] = useState({ name: '', address: '', lat: '', lng: '', phone: '', categoryId: '', themeTags: '', status: 'ACTIVE', naverUrl: '' })
   const [csvLoading, setCsvLoading] = useState(false)
@@ -86,6 +88,11 @@ export default function AdminStoresPage() {
     setDialogOpen(true)
   }
 
+  function openDetail(store: StoreRow) {
+    setViewStore(store)
+    setDetailOpen(true)
+  }
+
   function openEdit(store: StoreRow) {
     setEditStore(store)
     setForm({
@@ -99,6 +106,7 @@ export default function AdminStoresPage() {
       status: store.status,
       naverUrl: store.naverUrl ?? '',
     })
+    setDetailOpen(false)
     setDialogOpen(true)
   }
 
@@ -285,7 +293,7 @@ export default function AdminStoresPage() {
                 <tr
                   key={store.id}
                   className="hover:bg-gray-50 cursor-pointer"
-                  onClick={() => openEdit(store)}
+                  onClick={() => openDetail(store)}
                 >
                   <td className="px-4 py-3 font-medium">{store.name}</td>
                   <td className="px-4 py-3 text-gray-500">{store.category?.name ?? '-'}</td>
@@ -337,8 +345,106 @@ export default function AdminStoresPage() {
         </div>
       )}
 
+      {/* 상세 보기 모달 (읽기 전용) */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="max-w-2xl w-full" style={{ maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
+          <DialogHeader className="shrink-0">
+            <DialogTitle className="flex items-center gap-3">
+              <span>{viewStore?.name}</span>
+              {viewStore?.category && (
+                <Badge variant="outline" style={{ backgroundColor: (viewStore.category.color ?? '#888') + '20', borderColor: viewStore.category.color ?? undefined, color: viewStore.category.color ?? undefined }}>
+                  {viewStore.category.name}
+                </Badge>
+              )}
+              <Badge variant={viewStore?.status === 'ACTIVE' ? 'default' : 'secondary'} className="ml-auto">
+                {viewStore?.status === 'ACTIVE' ? '운영중' : '비활성'}
+              </Badge>
+            </DialogTitle>
+          </DialogHeader>
+
+          {viewStore && (
+            <div className="flex-1 overflow-y-auto space-y-5 pr-1">
+              {/* 기본 정보 */}
+              <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm">
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-400 mb-0.5">주소</p>
+                  <p className="font-medium">{viewStore.address}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">전화번호</p>
+                  <p>{viewStore.phone ?? <span className="text-gray-300">없음</span>}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">도보 (본사 기준)</p>
+                  <p>{viewStore.walkingMinutes != null ? `🚶 ${viewStore.walkingMinutes}분 (${viewStore.officeDistanceM}m)` : <span className="text-gray-300">없음</span>}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">좌표</p>
+                  <p className="font-mono text-xs">{viewStore.lat}, {viewStore.lng}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400 mb-0.5">평점</p>
+                  <p>{viewStore.internalRating ? <span className="text-amber-500 font-medium">★ {viewStore.internalRating.avgTotal.toFixed(1)}</span> : <span className="text-gray-300">없음</span>}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-400 mb-0.5">영업시간</p>
+                  <p className="whitespace-pre-line">{viewStore.businessHours ?? <span className="text-gray-300">없음</span>}</p>
+                </div>
+                {viewStore.themeTags.length > 0 && (
+                  <div className="col-span-2">
+                    <p className="text-xs text-gray-400 mb-1">테마 태그</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {viewStore.themeTags.map(tag => <Badge key={tag} variant="secondary">{tag}</Badge>)}
+                    </div>
+                  </div>
+                )}
+                <div className="col-span-2 flex gap-3">
+                  {viewStore.naverUrl && (
+                    <a href={viewStore.naverUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-blue-500 hover:underline text-sm">
+                      <ExternalLink size={13} /> 네이버 지도
+                    </a>
+                  )}
+                  {viewStore.kakaoUrl && (
+                    <a href={viewStore.kakaoUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-yellow-600 hover:underline text-sm">
+                      <ExternalLink size={13} /> 카카오 지도
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* 메뉴 */}
+              {viewStore.menus.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-400 mb-2">메뉴 ({viewStore.menus.length}개)</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {viewStore.menus.map(m => (
+                      <div key={m.id} className="flex justify-between items-center px-3 py-2 bg-gray-50 rounded-lg text-sm">
+                        <span className="truncate">{m.isRepresentative && <span className="text-amber-400 mr-1">★</span>}{m.name}</span>
+                        <span className="text-gray-500 shrink-0 ml-2">{m.price != null ? `${m.price.toLocaleString()}원` : '-'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 등록/수정 일시 */}
+              <div className="flex gap-6 text-xs text-gray-400 pt-1 border-t">
+                <span>등록: {new Date(viewStore.createdAt).toLocaleString('ko-KR')}</span>
+                <span>수정: {new Date(viewStore.updatedAt).toLocaleString('ko-KR')}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="shrink-0 pt-3 border-t flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setDetailOpen(false)}>닫기</Button>
+            <Button className="flex-1" onClick={() => viewStore && openEdit(viewStore)}>수정</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 매장 추가/수정 폼 모달 */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>{editStore ? '매장 수정' : '매장 추가'}</DialogTitle>
           </DialogHeader>

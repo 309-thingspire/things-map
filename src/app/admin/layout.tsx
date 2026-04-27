@@ -8,7 +8,8 @@ const navItems = [
   { href: '/admin/users', label: '계정 관리' },
   { href: '/admin/requests', label: '등록 요청' },
   { href: '/admin/reviews', label: '리뷰 관리' },
-{ href: '/admin/categories', label: '카테고리' },
+  { href: '/admin/categories', label: '카테고리' },
+  { href: '/admin/staging', label: '스테이징' },
 ]
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
