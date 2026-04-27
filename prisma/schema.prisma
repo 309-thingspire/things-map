@@ -28,6 +28,7 @@ model User {
   logins       UserLogin[]
   storeViews   StoreView[]
   favorites    UserFavorite[]
+  chatLogs     ChatLog[]
 
   @@map("users")
 }
@@ -310,6 +311,23 @@ model UserLogin {
   @@index([userId])
   @@index([createdAt])
   @@map("user_logins")
+}
+
+// ────────────────────────────────────────
+// 챗봇 대화 로그
+// ────────────────────────────────────────
+model ChatLog {
+  id               String   @id @default(cuid())
+  userId           String   @map("user_id")
+  user             User     @relation(fields: [userId], references: [id])
+  userMessage      String   @map("user_message") @db.Text
+  assistantMessage String   @default("") @map("assistant_message") @db.Text
+  storeIds         String[] @map("store_ids")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("chat_logs")
 }
 
 // ────────────────────────────────────────

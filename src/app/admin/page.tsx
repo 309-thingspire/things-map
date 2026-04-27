@@ -2,18 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Users, Store, ClipboardList, TrendingUp, ChevronDown, ChevronUp } from 'lucide-react'
+import { Users, Store, ClipboardList, TrendingUp, ChevronDown, ChevronUp, Bot } from 'lucide-react'
 
 interface DauPoint { date: string; count: number }
 interface PopularStore {
-  id: string
-  name: string
+  id: string; name: string
   category: { name: string; color: string | null } | null
   internalRating: { avgTotal: number; reviewCount: number } | null
   walkingMinutes: number | null
-  viewCount: number
-  chatCount: number
-  favoriteCount: number
+  viewCount: number; chatCount: number; favoriteCount: number
 }
 interface UserStat {
   id: string; name: string; team: string
@@ -32,9 +29,10 @@ interface UserPreference {
 interface TeamStat {
   team: string; memberCount: number; loginCount: number; reviewCount: number; requestCount: number
 }
-interface ReviewDimensions {
-  count: number
-  avg: { total: number; taste: number; price: number; service: number; ambiance: number; cleanliness: number }
+interface ChatStat {
+  totalMessages: number; uniqueUsers: number; todayMessages: number
+  dailyTrend: DauPoint[]
+  topStores: { storeId: string; name: string; category: { name: string; color: string | null } | null; count: number }[]
 }
 interface CategoryStat {
   id: string; name: string; color: string | null; storeCount: number; viewCount: number
@@ -45,13 +43,15 @@ interface RecentStore {
 }
 interface Stats {
   summary: { storeCount: number; userCount: number; pendingRequests: number }
+  requestStats: { pending: number; approved: number; rejected: number }
   dau: number; mau: number
   visitors: { today: number; todayAnon: number; month: number }
-  dauTrend: DauPoint[]
-  dauTrend30: DauPoint[]
+  dauTrend: DauPoint[]; dauTrend30: DauPoint[]
+  hourlyStats: { hour: number; count: number }[]
   popularStores: PopularStore[]
   teamStats: TeamStat[]
-  reviewDimensions: ReviewDimensions
+  chatStats: ChatStat
+  newUserTrend: { month: string; count: number }[]
   categoryStats: CategoryStat[]
   recentStores: RecentStore[]
   userStats: UserStat[]
@@ -67,19 +67,6 @@ function MiniBar({ value, max }: { value: number; max: number }) {
         <div className="h-full bg-blue-400 rounded-full" style={{ width: `${pct}%` }} />
       </div>
       <span className="text-xs text-gray-500 w-5 text-right">{value}</span>
-    </div>
-  )
-}
-
-function ScoreBar({ label, value, max = 5 }: { label: string; value: number; max?: number }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs text-gray-500 w-12 shrink-0">{label}</span>
-      <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-        <div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs font-medium text-gray-700 w-8 text-right">{value.toFixed(1)}</span>
     </div>
   )
 }
@@ -107,10 +94,15 @@ export default function AdminDashboard() {
     return <div className="text-gray-400 p-4">불러오는 중...</div>
   }
 
-  const { summary, dau, mau, visitors, dauTrend, dauTrend30, popularStores, teamStats, reviewDimensions, categoryStats, recentStores, userStats } = stats
+  const { summary, requestStats, dau, mau, visitors, dauTrend, dauTrend30, hourlyStats, popularStores, teamStats, chatStats, newUserTrend, categoryStats, recentStores, userStats } = stats
 
   const activeTrend = trendPeriod === 7 ? dauTrend : dauTrend30
   const maxDau = Math.max(...activeTrend.map(d => d.count), 1)
+  const maxHour = Math.max(...hourlyStats.map(h => h.count), 1)
+  const maxCatViews = Math.max(...categoryStats.map(c => c.viewCount), 1)
+  const maxTeamLogin = Math.max(...teamStats.map(t => t.loginCount), 1)
+  const maxNewUser = Math.max(...newUserTrend.map(u => u.count), 1)
+  const maxChatDay = Math.max(...chatStats.dailyTrend.map(d => d.count), 1)
 
   const sortedUsers = [...userStats].sort((a, b) => {
     const av = a[userSort] ?? 0, bv = b[userSort] ?? 0
@@ -120,18 +112,11 @@ export default function AdminDashboard() {
 
   const displayedStores = showAllStores ? popularStores : popularStores.slice(0, 10)
 
-  const maxCatViews = Math.max(...categoryStats.map(c => c.viewCount), 1)
-  const maxTeamLogin = Math.max(...teamStats.map(t => t.loginCount), 1)
-
   function SortBtn({ k, label }: { k: UserSortKey; label: string }) {
     const active = userSort === k
     return (
-      <th
-        className="text-left px-3 py-2.5 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap"
-        onClick={() => toggleUserSort(k)}
-      >
-        {label}
-        {active ? (userSortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}
+      <th className="text-left px-3 py-2.5 font-medium text-gray-500 cursor-pointer select-none hover:text-gray-800 whitespace-nowrap" onClick={() => toggleUserSort(k)}>
+        {label}{active ? (userSortDir === 'asc' ? ' ↑' : ' ↓') : ' ↕'}
       </th>
     )
   }
@@ -177,13 +162,9 @@ export default function AdminDashboard() {
             <p className="text-sm font-medium text-gray-500">DAU 트렌드</p>
             <div className="flex gap-1 bg-gray-100 p-0.5 rounded-md">
               {([7, 30] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setTrendPeriod(p)}
+                <button key={p} onClick={() => setTrendPeriod(p)}
                   className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${trendPeriod === p ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'}`}
-                >
-                  {p}일
-                </button>
+                >{p}일</button>
               ))}
             </div>
           </div>
@@ -192,16 +173,10 @@ export default function AdminDashboard() {
               const showLabel = trendPeriod === 7 || i % 5 === 0 || i === activeTrend.length - 1
               return (
                 <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
-                  <div
-                    className="w-full bg-blue-400 rounded-sm"
+                  <div className="w-full bg-blue-400 rounded-sm"
                     style={{ height: `${Math.max(2, Math.round((d.count / maxDau) * 44))}px` }}
-                    title={`${d.date}: ${d.count}명`}
-                  />
-                  {showLabel && (
-                    <span className="text-[8px] text-gray-400 leading-none whitespace-nowrap">
-                      {d.date.replace('월 ', '/').replace('일', '')}
-                    </span>
-                  )}
+                    title={`${d.date}: ${d.count}명`} />
+                  {showLabel && <span className="text-[8px] text-gray-400 leading-none whitespace-nowrap">{d.date.replace('월 ', '/').replace('일', '')}</span>}
                 </div>
               )
             })}
@@ -209,9 +184,55 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* 팀별 활동 + 리뷰 세부 분석 */}
+      {/* 시간대별 접속 패턴 + 신규 멤버 트렌드 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 팀별 활동 */}
+        {/* 시간대별 */}
+        <div className="bg-white rounded-xl shadow-sm border p-5">
+          <h2 className="font-semibold text-gray-900 mb-1">시간대별 접속 패턴</h2>
+          <p className="text-xs text-gray-400 mb-4">최근 30일 · KST 기준 로그인 횟수</p>
+          <div className="flex items-end gap-0.5 h-16">
+            {hourlyStats.map(({ hour, count }) => (
+              <div key={hour} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className={`w-full rounded-sm ${count === maxHour ? 'bg-blue-500' : 'bg-blue-200'}`}
+                  style={{ height: `${Math.max(2, Math.round((count / maxHour) * 52))}px` }}
+                  title={`${hour}시: ${count}회`}
+                />
+                {hour % 6 === 0 && <span className="text-[8px] text-gray-400 leading-none">{hour}시</span>}
+              </div>
+            ))}
+          </div>
+          {maxHour > 0 && (
+            <p className="text-xs text-gray-400 mt-2">
+              피크: {hourlyStats.find(h => h.count === maxHour)?.hour}시 ({maxHour}회)
+            </p>
+          )}
+        </div>
+
+        {/* 신규 멤버 트렌드 */}
+        <div className="bg-white rounded-xl shadow-sm border p-5">
+          <h2 className="font-semibold text-gray-900 mb-1">신규 멤버 트렌드</h2>
+          <p className="text-xs text-gray-400 mb-4">최근 6개월 · 일반 사용자 기준</p>
+          <div className="flex items-end gap-2 h-16">
+            {newUserTrend.map(({ month, count }) => (
+              <div key={month} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-xs font-medium text-gray-700">{count}</span>
+                <div
+                  className={`w-full rounded-sm ${count === maxNewUser && count > 0 ? 'bg-green-500' : 'bg-green-200'}`}
+                  style={{ height: `${Math.max(4, Math.round((count / Math.max(maxNewUser, 1)) * 40))}px` }}
+                  title={`${month}: ${count}명`}
+                />
+                <span className="text-[10px] text-gray-400 leading-none">{month}</span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">총 활성 사용자 {stats.summary.userCount}명</p>
+        </div>
+      </div>
+
+      {/* 팀별 활동 + 챗봇 분석 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 팀별 */}
         {teamStats.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
             <div className="px-5 py-4 border-b">
@@ -250,30 +271,109 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* 리뷰 세부 점수 */}
-        {reviewDimensions.count > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border p-5">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="font-semibold text-gray-900">리뷰 점수 분석</h2>
-                <p className="text-xs text-gray-400 mt-0.5">전체 리뷰 {reviewDimensions.count}개 기준</p>
-              </div>
-              <span className="text-3xl font-bold text-amber-500">{reviewDimensions.avg.total.toFixed(1)}</span>
+        {/* 챗봇 분석 */}
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="px-5 py-4 border-b flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900 flex items-center gap-2"><Bot size={16} className="text-purple-500" />띵봇 분석</h2>
+              <p className="text-xs text-gray-400 mt-0.5">누적 대화 기반</p>
             </div>
-            <div className="space-y-2.5">
-              <ScoreBar label="맛" value={reviewDimensions.avg.taste} />
-              <ScoreBar label="가격" value={reviewDimensions.avg.price} />
-              <ScoreBar label="서비스" value={reviewDimensions.avg.service} />
-              <ScoreBar label="분위기" value={reviewDimensions.avg.ambiance} />
-              <ScoreBar label="청결도" value={reviewDimensions.avg.cleanliness} />
+            <div className="flex gap-4 text-right">
+              <div>
+                <p className="text-2xl font-bold text-purple-600">{chatStats.totalMessages}</p>
+                <p className="text-xs text-gray-400">총 대화</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-purple-400">{chatStats.uniqueUsers}</p>
+                <p className="text-xs text-gray-400">이용자</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-purple-300">{chatStats.todayMessages}</p>
+                <p className="text-xs text-gray-400">오늘</p>
+              </div>
             </div>
           </div>
-        )}
+          {/* 30일 챗봇 트렌드 */}
+          <div className="px-5 pt-4 pb-2">
+            <p className="text-xs text-gray-400 mb-2">최근 30일 대화량</p>
+            <div className="flex items-end gap-0.5 h-10">
+              {chatStats.dailyTrend.map((d, i) => {
+                const showLabel = i % 5 === 0 || i === chatStats.dailyTrend.length - 1
+                return (
+                  <div key={d.date} className="flex-1 flex flex-col items-center gap-0.5">
+                    <div className="w-full bg-purple-300 rounded-sm"
+                      style={{ height: `${Math.max(1, Math.round((d.count / Math.max(maxChatDay, 1)) * 32))}px` }}
+                      title={`${d.date}: ${d.count}건`} />
+                    {showLabel && <span className="text-[8px] text-gray-400 leading-none whitespace-nowrap">{d.date.replace('월 ', '/').replace('일', '')}</span>}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          {/* 많이 추천된 매장 */}
+          {chatStats.topStores.length > 0 ? (
+            <div className="px-5 py-3 border-t">
+              <p className="text-xs text-gray-400 mb-2">가장 많이 추천된 매장</p>
+              <div className="space-y-1.5">
+                {chatStats.topStores.map((s, i) => (
+                  <div key={s.storeId} className="flex items-center gap-2">
+                    <span className="text-xs text-gray-400 w-3">{i + 1}</span>
+                    {s.category && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white shrink-0"
+                        style={{ background: s.category.color ?? '#9ca3af' }}>
+                        {s.category.name}
+                      </span>
+                    )}
+                    <span className="text-sm text-gray-800 flex-1 truncate">{s.name}</span>
+                    <span className="text-xs font-medium text-purple-500">{s.count}회</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="px-5 py-4 text-xs text-gray-400">아직 대화 데이터가 없습니다.</p>
+          )}
+        </div>
       </div>
 
-      {/* 카테고리 분포 + 최근 등록 매장 */}
+      {/* 요청 현황 + 카테고리 분포 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* 카테고리별 조회 분포 */}
+        {/* 요청 현황 */}
+        <div className="bg-white rounded-xl shadow-sm border p-5">
+          <h2 className="font-semibold text-gray-900 mb-4">매장 등록 요청 현황</h2>
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            {[
+              { label: '대기', value: requestStats.pending, color: 'bg-amber-50 text-amber-600 border-amber-200' },
+              { label: '승인', value: requestStats.approved, color: 'bg-green-50 text-green-600 border-green-200' },
+              { label: '거절', value: requestStats.rejected, color: 'bg-red-50 text-red-600 border-red-200' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className={`rounded-lg border p-3 text-center ${color}`}>
+                <p className="text-2xl font-bold">{value}</p>
+                <p className="text-xs mt-0.5 opacity-70">{label}</p>
+              </div>
+            ))}
+          </div>
+          {/* 처리율 */}
+          {(requestStats.approved + requestStats.rejected) > 0 && (
+            <div>
+              <div className="flex justify-between text-xs text-gray-400 mb-1">
+                <span>처리율</span>
+                <span>{Math.round(((requestStats.approved + requestStats.rejected) / (requestStats.approved + requestStats.rejected + requestStats.pending)) * 100)}%</span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                <div className="h-full bg-green-400" style={{ width: `${Math.round((requestStats.approved / Math.max(requestStats.approved + requestStats.rejected + requestStats.pending, 1)) * 100)}%` }} />
+                <div className="h-full bg-red-300" style={{ width: `${Math.round((requestStats.rejected / Math.max(requestStats.approved + requestStats.rejected + requestStats.pending, 1)) * 100)}%` }} />
+              </div>
+              <div className="flex gap-3 mt-1.5">
+                <span className="text-[10px] text-gray-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 inline-block" />승인</span>
+                <span className="text-[10px] text-gray-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-300 inline-block" />거절</span>
+                <span className="text-[10px] text-gray-400 flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-200 inline-block" />대기</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 카테고리별 조회 */}
         {categoryStats.length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border p-5">
             <h2 className="font-semibold text-gray-900 mb-1">카테고리별 조회</h2>
@@ -281,62 +381,49 @@ export default function AdminDashboard() {
             <div className="space-y-2.5">
               {categoryStats.map((c) => (
                 <div key={c.id} className="flex items-center gap-3">
-                  <span
-                    className="w-2 h-2 rounded-full shrink-0"
-                    style={{ background: c.color ?? '#9ca3af' }}
-                  />
-                  <span className="text-xs text-gray-700 w-24 truncate">{c.name}</span>
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color ?? '#9ca3af' }} />
+                  <span className="text-xs text-gray-700 w-20 truncate">{c.name}</span>
                   <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${Math.round((c.viewCount / maxCatViews) * 100)}%`,
-                        background: c.color ?? '#9ca3af',
-                        opacity: 0.8,
-                      }}
-                    />
+                    <div className="h-full rounded-full" style={{ width: `${Math.round((c.viewCount / maxCatViews) * 100)}%`, background: c.color ?? '#9ca3af', opacity: 0.8 }} />
                   </div>
-                  <span className="text-xs text-gray-500 w-12 text-right">{c.viewCount}회</span>
-                  <span className="text-xs text-gray-300 w-8 text-right">{c.storeCount}곳</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 최근 등록 매장 */}
-        {recentStores.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="px-5 py-4 border-b flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900">최근 등록 매장</h2>
-              <Link href="/admin/stores" className="text-xs text-blue-500 hover:text-blue-700">전체 보기</Link>
-            </div>
-            <div className="divide-y">
-              {recentStores.map((s) => (
-                <div key={s.id} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-gray-900 truncate">{s.name}</span>
-                      {s.category && (
-                        <span
-                          className="text-[10px] px-1.5 py-0.5 rounded-full text-white shrink-0"
-                          style={{ background: s.category.color ?? '#9ca3af' }}
-                        >
-                          {s.category.name}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 truncate mt-0.5">{s.address}</p>
-                  </div>
-                  <span className="text-xs text-gray-400 shrink-0">
-                    {new Date(s.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
-                  </span>
+                  <span className="text-xs text-gray-500 w-10 text-right">{c.viewCount}회</span>
+                  <span className="text-xs text-gray-300 w-6 text-right">{c.storeCount}</span>
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {/* 최근 등록 매장 */}
+      {recentStores.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
+          <div className="px-5 py-4 border-b flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">최근 등록 매장</h2>
+            <Link href="/admin/stores" className="text-xs text-blue-500 hover:text-blue-700">전체 보기</Link>
+          </div>
+          <div className="divide-y">
+            {recentStores.map((s) => (
+              <div key={s.id} className="px-5 py-3 flex items-center gap-3 hover:bg-gray-50">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-gray-900 truncate">{s.name}</span>
+                    {s.category && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full text-white shrink-0" style={{ background: s.category.color ?? '#9ca3af' }}>
+                        {s.category.name}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 truncate mt-0.5">{s.address}</p>
+                </div>
+                <span className="text-xs text-gray-400 shrink-0">
+                  {new Date(s.createdAt).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 인기 매장 */}
       <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
@@ -364,21 +451,12 @@ export default function AdminDashboard() {
                 <td className="px-4 py-3 text-gray-400 font-mono text-xs">{i + 1}</td>
                 <td className="px-4 py-3 font-medium text-gray-900">{store.name}</td>
                 <td className="px-4 py-3">
-                  {store.category ? (
-                    <span
-                      className="text-xs px-2 py-0.5 rounded-full text-white"
-                      style={{ background: store.category.color ?? '#9ca3af' }}
-                    >
-                      {store.category.name}
-                    </span>
-                  ) : <span className="text-gray-400 text-xs">미분류</span>}
+                  {store.category
+                    ? <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ background: store.category.color ?? '#9ca3af' }}>{store.category.name}</span>
+                    : <span className="text-gray-400 text-xs">미분류</span>}
                 </td>
-                <td className="px-4 py-3 text-blue-500 text-xs">
-                  {store.walkingMinutes != null ? `🚶 ${store.walkingMinutes}분` : '-'}
-                </td>
-                <td className="px-4 py-3 text-amber-500 text-xs">
-                  {store.internalRating ? `★ ${store.internalRating.avgTotal.toFixed(1)}` : '-'}
-                </td>
+                <td className="px-4 py-3 text-blue-500 text-xs">{store.walkingMinutes != null ? `🚶 ${store.walkingMinutes}분` : '-'}</td>
+                <td className="px-4 py-3 text-amber-500 text-xs">{store.internalRating ? `★ ${store.internalRating.avgTotal.toFixed(1)}` : '-'}</td>
                 <td className="px-4 py-3 text-gray-700 font-medium">{store.viewCount}</td>
                 <td className="px-4 py-3 text-purple-500 font-medium">{store.chatCount > 0 ? `🤖 ${store.chatCount}` : '-'}</td>
                 <td className="px-4 py-3 text-rose-500 font-medium">{store.favoriteCount > 0 ? `♥ ${store.favoriteCount}` : '-'}</td>
@@ -389,10 +467,7 @@ export default function AdminDashboard() {
         </table>
         {popularStores.length > 10 && (
           <div className="px-4 py-3 border-t flex justify-center">
-            <button
-              onClick={() => setShowAllStores(v => !v)}
-              className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-700"
-            >
+            <button onClick={() => setShowAllStores(v => !v)} className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-700">
               {showAllStores ? <><ChevronUp size={14} /> 접기</> : <><ChevronDown size={14} /> 전체 보기 ({popularStores.length}개)</>}
             </button>
           </div>
@@ -423,14 +498,12 @@ export default function AdminDashboard() {
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
                         {u.topCategories.map((c) => (
-                          <span
-                            key={c.categoryId}
+                          <span key={c.categoryId}
                             className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full text-white font-medium"
                             style={{ background: c.color ?? '#9ca3af' }}
                             title={`조회 ${c.views} · 즐겨찾기 ${c.favorites} · 리뷰 ${c.reviews}${c.avgScore != null ? ` · 평균 ${c.avgScore.toFixed(1)}점` : ''}`}
                           >
-                            {c.categoryName}
-                            <span className="opacity-75">·{c.score}</span>
+                            {c.categoryName}<span className="opacity-75">·{c.score}</span>
                           </span>
                         ))}
                       </div>

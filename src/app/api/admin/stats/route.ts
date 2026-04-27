@@ -17,8 +17,11 @@ export async function GET() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
   const thirtyDaysAgo = new Date(todayStart)
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
+  const sixMonthsAgo = new Date(todayStart)
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+  sixMonthsAgo.setDate(1)
 
-  // 관리자 제외: 일반 사용자 ID 목록 미리 확보
+  // 관리자 제외: 일반 사용자 ID 목록
   const regularUsers = await prisma.user.findMany({
     where: { role: 'USER' },
     select: { id: true },
@@ -26,71 +29,59 @@ export async function GET() {
   const regularUserIds = regularUsers.map((u) => u.id)
 
   const [
-    storeCount, userCount, pendingRequests,
+    storeCount, userCount, pendingRequests, approvedRequests, rejectedRequests,
     dauLogins, mauLogins,
     recentLogins7, recentLogins30,
     topViewGroups, allStoreViewGroups,
     todayVisits, monthVisits,
     users,
-    reviewDimensions,
     categories,
     recentStores,
     allActiveStoreCategories,
+    newUsersRaw,
+    chatLogsRaw,
+    chatMentionedStoreIds,
   ] = await Promise.all([
     prisma.store.count({ where: { status: 'ACTIVE' } }),
-
-    // 활성 일반 사용자 수 (관리자 제외)
     prisma.user.count({ where: { isActive: true, role: 'USER' } }),
-
     prisma.storeRequest.count({ where: { status: 'PENDING' } }),
+    prisma.storeRequest.count({ where: { status: 'APPROVED' } }),
+    prisma.storeRequest.count({ where: { status: 'REJECTED' } }),
 
-    // DAU: 오늘 로그인한 고유 유저 (관리자 제외)
     prisma.userLogin.groupBy({
       by: ['userId'],
       where: { createdAt: { gte: todayStart }, userId: { in: regularUserIds } },
     }),
-
-    // MAU: 이번 달 로그인한 고유 유저 (관리자 제외)
     prisma.userLogin.groupBy({
       by: ['userId'],
       where: { createdAt: { gte: monthStart }, userId: { in: regularUserIds } },
     }),
 
-    // 최근 7일 로그인 이력 (관리자 제외)
     prisma.userLogin.findMany({
       where: { createdAt: { gte: sevenDaysAgo }, userId: { in: regularUserIds } },
       select: { userId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     }),
-
-    // 최근 30일 로그인 이력 (관리자 제외)
     prisma.userLogin.findMany({
       where: { createdAt: { gte: thirtyDaysAgo }, userId: { in: regularUserIds } },
       select: { userId: true, createdAt: true },
       orderBy: { createdAt: 'asc' },
     }),
 
-    // 인기 매장: StoreView 기준 top 20
     prisma.storeView.groupBy({
       by: ['storeId'],
       _count: { storeId: true },
       orderBy: { _count: { storeId: 'desc' } },
       take: 20,
     }),
-
-    // 카테고리 통계용 전체 StoreView
     prisma.storeView.groupBy({
       by: ['storeId'],
       _count: { storeId: true },
     }),
 
-    // 오늘 방문자 (고유 sessionId)
     prisma.pageVisit.groupBy({ by: ['sessionId'], where: { createdAt: { gte: todayStart } } }),
-
-    // 이번 달 방문자
     prisma.pageVisit.groupBy({ by: ['sessionId'], where: { createdAt: { gte: monthStart } } }),
 
-    // 계정별 통계 (관리자 제외)
     prisma.user.findMany({
       where: { isActive: true, role: 'USER' },
       select: {
@@ -100,30 +91,11 @@ export async function GET() {
       orderBy: { name: 'asc' },
     }),
 
-    // 리뷰 점수 차원별 평균
-    prisma.review.aggregate({
-      where: { status: 'ACTIVE' },
-      _avg: {
-        scoreTotal: true,
-        scoreTaste: true,
-        scorePrice: true,
-        scoreService: true,
-        scoreAmbiance: true,
-        scoreCleanliness: true,
-      },
-      _count: { id: true },
-    }),
-
-    // 카테고리 목록 + 매장 수
     prisma.category.findMany({
-      select: {
-        id: true, name: true, color: true,
-        _count: { select: { stores: true } },
-      },
+      select: { id: true, name: true, color: true, _count: { select: { stores: true } } },
       orderBy: { name: 'asc' },
     }),
 
-    // 최근 등록 매장
     prisma.store.findMany({
       where: { status: 'ACTIVE' },
       select: {
@@ -134,42 +106,63 @@ export async function GET() {
       take: 5,
     }),
 
-    // 카테고리 조회 집계용: 모든 활성 매장의 categoryId
     prisma.store.findMany({
       where: { status: 'ACTIVE' },
       select: { id: true, categoryId: true },
     }),
+
+    // 신규 유저 등록 트렌드 (최근 6개월)
+    prisma.user.findMany({
+      where: { role: 'USER', createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+
+    // 챗봇 대화 로그 (최근 30일)
+    prisma.chatLog.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { userId: true, createdAt: true, storeIds: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+
+    // 챗봇에서 가장 많이 언급된 매장 (전체 기간)
+    prisma.chatLog.findMany({
+      where: { storeIds: { isEmpty: false } },
+      select: { storeIds: true },
+    }),
   ])
 
-  // 7일 DAU 트렌드
+  // ── 7일 DAU 트렌드
   const dauTrend: { date: string; count: number }[] = []
   for (let i = 0; i < 7; i++) {
     const d = new Date(sevenDaysAgo)
     d.setDate(d.getDate() + i)
-    const next = new Date(d)
-    next.setDate(next.getDate() + 1)
+    const next = new Date(d); next.setDate(next.getDate() + 1)
     const dateStr = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
-    const unique = new Set(
-      recentLogins7.filter((l) => l.createdAt >= d && l.createdAt < next).map((l) => l.userId)
-    ).size
+    const unique = new Set(recentLogins7.filter((l) => l.createdAt >= d && l.createdAt < next).map((l) => l.userId)).size
     dauTrend.push({ date: dateStr, count: unique })
   }
 
-  // 30일 DAU 트렌드
+  // ── 30일 DAU 트렌드
   const dauTrend30: { date: string; count: number }[] = []
   for (let i = 0; i < 30; i++) {
     const d = new Date(thirtyDaysAgo)
     d.setDate(d.getDate() + i)
-    const next = new Date(d)
-    next.setDate(next.getDate() + 1)
+    const next = new Date(d); next.setDate(next.getDate() + 1)
     const dateStr = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
-    const unique = new Set(
-      recentLogins30.filter((l) => l.createdAt >= d && l.createdAt < next).map((l) => l.userId)
-    ).size
+    const unique = new Set(recentLogins30.filter((l) => l.createdAt >= d && l.createdAt < next).map((l) => l.userId)).size
     dauTrend30.push({ date: dateStr, count: unique })
   }
 
-  // 팀별 통계 (users는 이미 관리자 제외)
+  // ── 시간대별 접속 분포 (최근 30일, KST = UTC+9)
+  const hourCounts = new Array(24).fill(0)
+  for (const login of recentLogins30) {
+    const hourKST = (login.createdAt.getUTCHours() + 9) % 24
+    hourCounts[hourKST]++
+  }
+  const hourlyStats = hourCounts.map((count, hour) => ({ hour, count }))
+
+  // ── 팀별 통계
   const teamMap = new Map<string, { memberCount: number; loginCount: number; reviewCount: number; requestCount: number }>()
   for (const u of users) {
     const team = u.team || '미지정'
@@ -184,7 +177,70 @@ export async function GET() {
     .map(([team, s]) => ({ team, ...s }))
     .sort((a, b) => b.loginCount - a.loginCount)
 
-  // 인기 매장 상세 정보
+  // ── 신규 유저 트렌드 (월별)
+  const monthMap = new Map<string, number>()
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(sixMonthsAgo)
+    d.setMonth(d.getMonth() + i)
+    monthMap.set(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, 0)
+  }
+  for (const u of newUsersRaw) {
+    const key = `${u.createdAt.getFullYear()}-${String(u.createdAt.getMonth() + 1).padStart(2, '0')}`
+    if (monthMap.has(key)) monthMap.set(key, (monthMap.get(key) ?? 0) + 1)
+  }
+  const newUserTrend = Array.from(monthMap.entries()).map(([month, count]) => ({
+    month: `${parseInt(month.split('-')[1])}월`,
+    count,
+  }))
+
+  // ── 챗봇 분석
+  const chatDayMap = new Map<string, number>()
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(thirtyDaysAgo)
+    d.setDate(d.getDate() + i)
+    chatDayMap.set(d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }), 0)
+  }
+  for (const log of chatLogsRaw) {
+    const key = log.createdAt.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
+    if (chatDayMap.has(key)) chatDayMap.set(key, (chatDayMap.get(key) ?? 0) + 1)
+  }
+  const chatDailyTrend = Array.from(chatDayMap.entries()).map(([date, count]) => ({ date, count }))
+
+  // 챗봇에서 가장 많이 언급된 매장 집계
+  const mentionMap = new Map<string, number>()
+  for (const log of chatMentionedStoreIds) {
+    for (const sid of log.storeIds) {
+      mentionMap.set(sid, (mentionMap.get(sid) ?? 0) + 1)
+    }
+  }
+  const topMentionedIds = Array.from(mentionMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id]) => id)
+
+  const topChatStoreDetails = topMentionedIds.length > 0
+    ? await prisma.store.findMany({
+        where: { id: { in: topMentionedIds } },
+        select: { id: true, name: true, category: { select: { name: true, color: true } } },
+      })
+    : []
+
+  const topChatStores = topMentionedIds.map((id) => ({
+    storeId: id,
+    name: topChatStoreDetails.find((s) => s.id === id)?.name ?? id,
+    category: topChatStoreDetails.find((s) => s.id === id)?.category ?? null,
+    count: mentionMap.get(id) ?? 0,
+  }))
+
+  const chatStats = {
+    totalMessages: await prisma.chatLog.count(),
+    uniqueUsers: new Set(chatLogsRaw.map((l) => l.userId)).size,
+    todayMessages: chatLogsRaw.filter((l) => l.createdAt >= todayStart).length,
+    dailyTrend: chatDailyTrend,
+    topStores: topChatStores,
+  }
+
+  // ── 인기 매장 상세
   const storeIds = topViewGroups.map((g) => g.storeId)
   const [storeDetails, chatViewGroups] = await Promise.all([
     prisma.store.findMany({
@@ -193,8 +249,7 @@ export async function GET() {
         id: true, name: true,
         category: { select: { name: true, color: true } },
         internalRating: { select: { avgTotal: true, reviewCount: true } },
-        walkingMinutes: true,
-        favoriteCount: true,
+        walkingMinutes: true, favoriteCount: true,
       },
     }),
     prisma.storeView.groupBy({
@@ -220,23 +275,19 @@ export async function GET() {
         id: true, name: true,
         category: { select: { name: true, color: true } },
         internalRating: { select: { avgTotal: true, reviewCount: true } },
-        walkingMinutes: true,
-        favoriteCount: true,
+        walkingMinutes: true, favoriteCount: true,
       },
       orderBy: { internalRating: { reviewCount: 'desc' } },
       take: 10 - popularStores.length,
     })
-    popularStores = [
-      ...popularStores,
-      ...reviewBased.map((s) => ({ ...s, viewCount: 0, chatCount: 0 })),
-    ]
+    popularStores = [...popularStores, ...reviewBased.map((s) => ({ ...s, viewCount: 0, chatCount: 0 }))]
   }
 
-  // 오늘 방문자 중 비로그인
+  // ── 방문자
   const todayLoggedIn = new Set(dauLogins.map((l) => l.userId)).size
   const todayAnon = todayVisits.length - todayLoggedIn
 
-  // 카테고리별 뷰 집계: storeId → categoryId 매핑 후 합산
+  // ── 카테고리별 뷰 집계
   const storeCatMap = new Map<string, string>()
   for (const s of allActiveStoreCategories) {
     if (s.categoryId) storeCatMap.set(s.id, s.categoryId)
@@ -247,12 +298,9 @@ export async function GET() {
     if (!catId) continue
     catViewMap.set(catId, (catViewMap.get(catId) ?? 0) + vc._count.storeId)
   }
-
   const categoryStats = categories
     .map((cat) => ({
-      id: cat.id,
-      name: cat.name,
-      color: cat.color,
+      id: cat.id, name: cat.name, color: cat.color,
       storeCount: cat._count.stores,
       viewCount: catViewMap.get(cat.id) ?? 0,
     }))
@@ -262,24 +310,17 @@ export async function GET() {
   return NextResponse.json({
     data: {
       summary: { storeCount, userCount, pendingRequests },
+      requestStats: { pending: pendingRequests, approved: approvedRequests, rejected: rejectedRequests },
       dau: dauLogins.length,
       mau: mauLogins.length,
       visitors: { today: todayVisits.length, todayAnon: Math.max(0, todayAnon), month: monthVisits.length },
       dauTrend,
       dauTrend30,
+      hourlyStats,
       popularStores,
       teamStats,
-      reviewDimensions: {
-        count: reviewDimensions._count.id,
-        avg: {
-          total: reviewDimensions._avg.scoreTotal ?? 0,
-          taste: reviewDimensions._avg.scoreTaste ?? 0,
-          price: reviewDimensions._avg.scorePrice ?? 0,
-          service: reviewDimensions._avg.scoreService ?? 0,
-          ambiance: reviewDimensions._avg.scoreAmbiance ?? 0,
-          cleanliness: reviewDimensions._avg.scoreCleanliness ?? 0,
-        },
-      },
+      chatStats,
+      newUserTrend,
       categoryStats,
       recentStores: recentStores.map((s) => ({ ...s, createdAt: s.createdAt.toISOString() })),
       userStats: users.map((u) => ({

@@ -49,8 +49,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const { messages } = await request.json()
+  const { messages } = await request.json() as { messages: { role: string; content: string }[] }
   const storeContext = await buildStoreContext()
+
+  // 마지막 사용자 메시지 추출 (로그 저장용)
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 
   const systemPrompt = `당신은 띵봇입니다. 회사 근처 맛집/카페/식당을 친근하게 추천해주는 어시스턴트예요 😊
 
@@ -98,6 +101,8 @@ ${storeContext}
 
   const upstreamBody = ollamaRes.body
 
+  let fullResponse = ''
+
   const stream = new ReadableStream({
     async start(controller) {
       const reader = upstreamBody.getReader()
@@ -116,7 +121,10 @@ ${storeContext}
             try {
               const json = JSON.parse(line)
               const token: string = json.message?.content ?? ''
-              if (token) controller.enqueue(new TextEncoder().encode(token))
+              if (token) {
+                fullResponse += token
+                controller.enqueue(new TextEncoder().encode(token))
+              }
             } catch {
               // malformed JSON line, skip
             }
@@ -124,6 +132,16 @@ ${storeContext}
         }
       } finally {
         controller.close()
+        // 대화 로그 저장 (fire-and-forget)
+        const storeIds = [...(fullResponse.match(/\[STORE:([^\]]+)\]/g) ?? [])].map((m) => m.slice(7, -1))
+        prisma.chatLog.create({
+          data: {
+            userId: session.userId,
+            userMessage: lastUserMessage,
+            assistantMessage: fullResponse,
+            storeIds,
+          },
+        }).catch(() => {})
       }
     },
   })
