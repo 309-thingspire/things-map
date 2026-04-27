@@ -14,7 +14,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     const user = await prisma.user.update({
       where: { id },
-      data: { isActive: body.isActive, role: body.role },
+      data: {
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.role !== undefined ? { role: body.role } : {}),
+        ...(body.team !== undefined ? { team: body.team } : {}),
+      },
       select: { id: true, name: true, team: true, role: true, isActive: true },
     })
 

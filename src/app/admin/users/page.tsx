@@ -1,20 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Copy, Check } from 'lucide-react'
+import { Copy, Check, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { toast } from '@/components/ui/Toaster'
 import type { User } from '@/types'
+
+interface EditState {
+  id: string
+  team: string
+  role: string
+}
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   const [newUser, setNewUser] = useState({ name: '', team: '', role: 'USER' })
   const [createdCode, setCreatedCode] = useState<{ name: string; code: string } | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [editState, setEditState] = useState<EditState | null>(null)
+  const [saving, setSaving] = useState(false)
 
   function copyCode(id: string, code: string) {
     navigator.clipboard.writeText(code)
@@ -43,6 +52,7 @@ export default function AdminUsersPage() {
       const json = await res.json()
       setCreatedCode({ name: json.data.name, code: json.data.approvalCode })
       setNewUser({ name: '', team: '', role: 'USER' })
+      setCreateOpen(false)
       fetchUsers()
     }
   }
@@ -56,11 +66,33 @@ export default function AdminUsersPage() {
     fetchUsers()
   }
 
+  function openEdit(user: User) {
+    setEditState({ id: user.id, team: user.team, role: user.role })
+  }
+
+  async function handleSaveEdit() {
+    if (!editState) return
+    setSaving(true)
+    const res = await fetch(`/api/users/${editState.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ team: editState.team, role: editState.role }),
+    })
+    setSaving(false)
+    if (res.ok) {
+      toast('저장되었습니다.')
+      setEditState(null)
+      fetchUsers()
+    } else {
+      toast('저장에 실패했습니다.', 'error')
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-gray-900">계정 관리</h1>
-        <Button onClick={() => setDialogOpen(true)}>+ 승인코드 발급</Button>
+        <Button onClick={() => setCreateOpen(true)}>+ 승인코드 발급</Button>
       </div>
 
       {createdCode && (
@@ -68,7 +100,7 @@ export default function AdminUsersPage() {
           <p className="text-sm font-medium text-green-800">{createdCode.name} 승인코드:</p>
           <div className="flex items-center gap-2 mt-1">
             <code className="text-sm font-mono bg-white border rounded px-2 py-1 flex-1 break-all">{createdCode.code}</code>
-            <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(createdCode.code); }}>복사</Button>
+            <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(createdCode.code)}>복사</Button>
           </div>
         </div>
       )}
@@ -122,9 +154,18 @@ export default function AdminUsersPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button size="sm" variant="outline" onClick={() => toggleActive(user)}>
-                      {user.isActive ? '비활성화' : '활성화'}
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => openEdit(user)}
+                        className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="정보 수정"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                      <Button size="sm" variant="outline" onClick={() => toggleActive(user)}>
+                        {user.isActive ? '비활성화' : '활성화'}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -133,7 +174,8 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* 승인코드 발급 모달 */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>승인코드 발급</DialogTitle>
@@ -151,6 +193,44 @@ export default function AdminUsersPage() {
             </select>
             <Button className="w-full" onClick={handleCreate}>발급</Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 정보 수정 모달 */}
+      <Dialog open={!!editState} onOpenChange={(open) => { if (!open) setEditState(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>정보 수정</DialogTitle>
+          </DialogHeader>
+          {editState && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">팀</label>
+                <Input
+                  value={editState.team}
+                  onChange={(e) => setEditState({ ...editState, team: e.target.value })}
+                  placeholder="팀명 입력"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">역할</label>
+                <select
+                  className="w-full border rounded-md px-3 py-2 text-sm"
+                  value={editState.role}
+                  onChange={(e) => setEditState({ ...editState, role: e.target.value })}
+                >
+                  <option value="USER">일반 사용자</option>
+                  <option value="ADMIN">관리자</option>
+                </select>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button variant="outline" className="flex-1" onClick={() => setEditState(null)}>취소</Button>
+                <Button className="flex-1" onClick={handleSaveEdit} disabled={saving}>
+                  {saving ? '저장 중…' : '저장'}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
