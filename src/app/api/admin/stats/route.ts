@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  try {
   const session = await getSession()
   if (!session || session.role !== 'ADMIN') {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -39,8 +40,6 @@ export async function GET() {
     recentStores,
     allActiveStoreCategories,
     newUsersRaw,
-    chatLogsRaw,
-    chatMentionedStoreIds,
   ] = await Promise.all([
     prisma.store.count({ where: { status: 'ACTIVE' } }),
     prisma.user.count({ where: { isActive: true, role: 'USER' } }),
@@ -117,20 +116,29 @@ export async function GET() {
       select: { createdAt: true },
       orderBy: { createdAt: 'asc' },
     }),
-
-    // 챗봇 대화 로그 (최근 30일)
-    prisma.chatLog.findMany({
-      where: { createdAt: { gte: thirtyDaysAgo } },
-      select: { userId: true, createdAt: true, storeIds: true },
-      orderBy: { createdAt: 'asc' },
-    }),
-
-    // 챗봇에서 가장 많이 언급된 매장 (전체 기간)
-    prisma.chatLog.findMany({
-      where: { storeIds: { isEmpty: false } },
-      select: { storeIds: true },
-    }),
   ])
+
+  // ── 챗봇 로그 (새 테이블 — 마이그레이션 미반영 서버에서도 안전하게)
+  type ChatLogRow = { userId: string; createdAt: Date; storeIds: string[] }
+  let chatLogsRaw: ChatLogRow[] = []
+  let chatMentionedStoreIds: { storeIds: string[] }[] = []
+  let chatTotalCount = 0
+  try {
+    ;[chatLogsRaw, chatMentionedStoreIds, chatTotalCount] = await Promise.all([
+      prisma.chatLog.findMany({
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        select: { userId: true, createdAt: true, storeIds: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      prisma.chatLog.findMany({
+        where: { storeIds: { isEmpty: false } },
+        select: { storeIds: true },
+      }),
+      prisma.chatLog.count(),
+    ])
+  } catch {
+    // 서버 재시작 전 Prisma 클라이언트 미반영 상태에서 안전하게 빈값 반환
+  }
 
   // ── 7일 DAU 트렌드
   const dauTrend: { date: string; count: number }[] = []
@@ -233,7 +241,7 @@ export async function GET() {
   }))
 
   const chatStats = {
-    totalMessages: await prisma.chatLog.count(),
+    totalMessages: chatTotalCount,
     uniqueUsers: new Set(chatLogsRaw.map((l) => l.userId)).size,
     todayMessages: chatLogsRaw.filter((l) => l.createdAt >= todayStart).length,
     dailyTrend: chatDailyTrend,
@@ -332,4 +340,8 @@ export async function GET() {
       })),
     },
   })
+  } catch (err) {
+    console.error('[admin/stats]', err)
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
