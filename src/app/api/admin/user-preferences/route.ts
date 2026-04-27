@@ -33,7 +33,7 @@ export async function GET() {
 
   const [users, views, favorites, reviews] = await Promise.all([
     prisma.user.findMany({
-      where: { isActive: true },
+      where: { isActive: true, role: 'USER' },
       select: { id: true, name: true, team: true },
       orderBy: { name: 'asc' },
     }),
