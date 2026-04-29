@@ -1,68 +1,78 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 
-export async function DELETE() {
+type ResetType =
+  | 'chatLogs'
+  | 'reviews'
+  | 'favorites'
+  | 'requests'
+  | 'storeViews'
+  | 'pageVisits'
+  | 'stagingCrawl'
+
+export async function DELETE(request: NextRequest) {
   try {
     const session = await getSession()
     if (!session || session.role !== 'ADMIN') {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // 로그인 기록(UserLogin)·계정(User)·매장·카테고리·메뉴는 유지
-    // FK 의존 순서대로 삭제
-    const [
-      chatLogs,
-      reviews,
-      favorites,
-      requests,
-      storeViews,
-      pageVisits,
-      stagingStores,
-      crawlJobs,
-    ] = await Promise.all([
-      prisma.chatLog.deleteMany({}),
-      prisma.review.deleteMany({}),
-      prisma.userFavorite.deleteMany({}),
-      prisma.storeRequest.deleteMany({}),
-      prisma.storeView.deleteMany({}),
-      prisma.pageVisit.deleteMany({}),
-      prisma.stagingStore.deleteMany({}),
-      prisma.crawlJob.deleteMany({}),
-    ])
+    const { types } = (await request.json()) as { types: ResetType[] }
+    if (!Array.isArray(types) || types.length === 0) {
+      return NextResponse.json({ error: '삭제할 항목을 선택해주세요.' }, { status: 400 })
+    }
 
-    // 리뷰 삭제 후 집계 초기화
-    await prisma.internalRating.updateMany({
-      data: {
-        avgTotal: 0,
-        avgTaste: 0,
-        avgPrice: 0,
-        avgService: 0,
-        avgAmbiance: 0,
-        avgCleanliness: 0,
-        reviewCount: 0,
-      },
-    })
+    const result: Record<string, number> = {}
 
-    // 즐겨찾기 수 초기화
-    await prisma.store.updateMany({
-      data: { favoriteCount: 0 },
-    })
+    if (types.includes('chatLogs')) {
+      const r = await prisma.chatLog.deleteMany({})
+      result.chatLogs = r.count
+    }
 
-    return NextResponse.json({
-      data: {
-        deleted: {
-          chatLogs: chatLogs.count,
-          reviews: reviews.count,
-          favorites: favorites.count,
-          requests: requests.count,
-          storeViews: storeViews.count,
-          pageVisits: pageVisits.count,
-          stagingStores: stagingStores.count,
-          crawlJobs: crawlJobs.count,
+    if (types.includes('reviews')) {
+      const r = await prisma.review.deleteMany({})
+      result.reviews = r.count
+      // 집계 초기화
+      await prisma.internalRating.updateMany({
+        data: {
+          avgTotal: 0, avgTaste: 0, avgPrice: 0,
+          avgService: 0, avgAmbiance: 0, avgCleanliness: 0,
+          reviewCount: 0,
         },
-      },
-    })
+      })
+    }
+
+    if (types.includes('favorites')) {
+      const r = await prisma.userFavorite.deleteMany({})
+      result.favorites = r.count
+      await prisma.store.updateMany({ data: { favoriteCount: 0 } })
+    }
+
+    if (types.includes('requests')) {
+      const r = await prisma.storeRequest.deleteMany({})
+      result.requests = r.count
+    }
+
+    if (types.includes('storeViews')) {
+      const r = await prisma.storeView.deleteMany({})
+      result.storeViews = r.count
+    }
+
+    if (types.includes('pageVisits')) {
+      const r = await prisma.pageVisit.deleteMany({})
+      result.pageVisits = r.count
+    }
+
+    if (types.includes('stagingCrawl')) {
+      // StagingStore → CrawlJob 순서 (FK)
+      const s = await prisma.stagingStore.deleteMany({})
+      const c = await prisma.crawlJob.deleteMany({})
+      result.stagingStores = s.count
+      result.crawlJobs = c.count
+    }
+
+    return NextResponse.json({ data: { deleted: result } })
   } catch (err) {
     console.error('[reset-data]', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

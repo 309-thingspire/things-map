@@ -89,8 +89,34 @@ export default function AdminDashboard() {
   const [preferences, setPreferences] = useState<UserPreference[]>([])
   const [trendPeriod, setTrendPeriod] = useState<7 | 30>(7)
   const [chatKeywords, setChatKeywords] = useState<ChatKeywords | null>(null)
-  const [resetConfirm, setResetConfirm] = useState(false)
+  const [resetOpen, setResetOpen] = useState(false)
   const [resetting, setResetting] = useState(false)
+  const RESET_OPTIONS = [
+    { key: 'chatLogs',    label: '챗봇 대화 기록' },
+    { key: 'reviews',     label: '리뷰 및 평점' },
+    { key: 'favorites',   label: '즐겨찾기' },
+    { key: 'requests',    label: '매장 등록 요청' },
+    { key: 'storeViews',  label: '매장 조회 기록' },
+    { key: 'pageVisits',  label: '페이지 방문 기록' },
+    { key: 'stagingCrawl', label: '스테이징 / 크롤 작업' },
+  ] as const
+  type ResetKey = typeof RESET_OPTIONS[number]['key']
+  const [selectedTypes, setSelectedTypes] = useState<Set<ResetKey>>(new Set())
+
+  function toggleResetType(key: ResetKey) {
+    setSelectedTypes(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+  function toggleAllReset() {
+    setSelectedTypes(prev =>
+      prev.size === RESET_OPTIONS.length
+        ? new Set()
+        : new Set(RESET_OPTIONS.map(o => o.key))
+    )
+  }
 
   useEffect(() => {
     fetch('/api/admin/stats').then(r => r.json()).then(j => { setStats(j.data); setLoading(false) })
@@ -99,12 +125,17 @@ export default function AdminDashboard() {
   }, [])
 
   async function handleReset() {
+    if (selectedTypes.size === 0) return
     setResetting(true)
     try {
-      const res = await fetch('/api/admin/reset-data', { method: 'DELETE' })
+      const res = await fetch('/api/admin/reset-data', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ types: [...selectedTypes] }),
+      })
       if (res.ok) {
-        setResetConfirm(false)
-        // 통계 새로고침
+        setResetOpen(false)
+        setSelectedTypes(new Set())
         fetch('/api/admin/stats').then(r => r.json()).then(j => setStats(j.data))
       }
     } finally {
@@ -153,7 +184,7 @@ export default function AdminDashboard() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">대시보드</h1>
         <button
-          onClick={() => setResetConfirm(true)}
+          onClick={() => { setResetOpen(true); setSelectedTypes(new Set()) }}
           className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
         >
           <Trash2 size={14} />
@@ -161,27 +192,43 @@ export default function AdminDashboard() {
         </button>
       </div>
 
-      {/* 초기화 확인 모달 */}
-      {resetConfirm && (
+      {/* 초기화 선택 모달 */}
+      {resetOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">데이터 초기화</h2>
-            <p className="text-sm text-gray-600 mb-1">
-              아래 데이터를 모두 삭제합니다.
-            </p>
-            <ul className="text-sm text-gray-500 list-disc list-inside mb-4 space-y-0.5">
-              <li>챗봇 대화 기록</li>
-              <li>리뷰 및 평점</li>
-              <li>즐겨찾기</li>
-              <li>매장 등록 요청</li>
-              <li>매장 조회 기록</li>
-              <li>페이지 방문 기록</li>
-              <li>스테이징 / 크롤 작업</li>
-            </ul>
-            <p className="text-xs text-gray-400 mb-5">로그인 기록과 계정 정보는 유지됩니다.</p>
+            <h2 className="text-lg font-bold text-gray-900 mb-1">데이터 초기화</h2>
+            <p className="text-sm text-gray-500 mb-4">삭제할 항목을 선택하세요.</p>
+
+            {/* 전체 선택 */}
+            <label className="flex items-center gap-2.5 py-2 border-b mb-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={selectedTypes.size === RESET_OPTIONS.length}
+                onChange={toggleAllReset}
+                className="w-4 h-4 accent-red-500"
+              />
+              <span className="text-sm font-medium text-gray-700">전체 선택</span>
+            </label>
+
+            <div className="space-y-1 mb-5">
+              {RESET_OPTIONS.map(({ key, label }) => (
+                <label key={key} className="flex items-center gap-2.5 py-1.5 cursor-pointer select-none rounded-lg hover:bg-gray-50 px-1">
+                  <input
+                    type="checkbox"
+                    checked={selectedTypes.has(key)}
+                    onChange={() => toggleResetType(key)}
+                    className="w-4 h-4 accent-red-500"
+                  />
+                  <span className="text-sm text-gray-700">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <p className="text-xs text-gray-400 mb-4">로그인 기록과 계정 정보는 항상 유지됩니다.</p>
+
             <div className="flex gap-2">
               <button
-                onClick={() => setResetConfirm(false)}
+                onClick={() => setResetOpen(false)}
                 disabled={resetting}
                 className="flex-1 py-2 rounded-xl border text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
               >
@@ -189,10 +236,10 @@ export default function AdminDashboard() {
               </button>
               <button
                 onClick={handleReset}
-                disabled={resetting}
-                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
+                disabled={resetting || selectedTypes.size === 0}
+                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-40 transition-colors"
               >
-                {resetting ? '초기화 중...' : '초기화'}
+                {resetting ? '삭제 중...' : `${selectedTypes.size}개 삭제`}
               </button>
             </div>
           </div>
