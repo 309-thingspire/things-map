@@ -8,15 +8,24 @@ const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen3.5:4b'
 const CACHE_TTL = 5 * 60 * 1000
 
-// 매장명 → 실제 storeId 매핑 (숫자 인덱스 방식 폐기 — AI가 번호를 혼동하는 근본 원인)
-let storeCache: { data: string; nameToId: Record<string, string>; ts: number } | null = null
+interface StoreData {
+  id: string
+  name: string
+  categoryName: string | null
+  walkingMinutes: number | null
+  themeTags: string[]
+  menus: string[]
+}
 
-async function buildStoreContext(): Promise<{ context: string; nameToId: Record<string, string> }> {
+// raw 배열로 캐시 — 요청마다 순서를 셔플해서 AI 편향 방지
+let storeCache: { stores: StoreData[]; nameToId: Record<string, string>; ts: number } | null = null
+
+async function getStores(): Promise<{ stores: StoreData[]; nameToId: Record<string, string> }> {
   if (storeCache && Date.now() - storeCache.ts < CACHE_TTL) {
-    return { context: storeCache.data, nameToId: storeCache.nameToId }
+    return { stores: storeCache.stores, nameToId: storeCache.nameToId }
   }
 
-  const stores = await prisma.store.findMany({
+  const raw = await prisma.store.findMany({
     where: { status: 'ACTIVE' },
     include: {
       category: { select: { name: true } },
@@ -26,29 +35,49 @@ async function buildStoreContext(): Promise<{ context: string; nameToId: Record<
         take: 3,
       },
     },
-    orderBy: { name: 'asc' },
   })
 
   const nameToId: Record<string, string> = {}
-
-  const lines = stores.map((s) => {
+  const stores: StoreData[] = raw.map((s) => {
     nameToId[s.name] = s.id
-    const menus = s.menus.length ? s.menus.map((m) => m.name).join(', ') : ''
-    const tags = s.themeTags.slice(0, 3).join(', ')
-    return [
-      s.name,
-      s.category?.name ? `카테고리:${s.category.name}` : '',
-      s.walkingMinutes ? `도보:${s.walkingMinutes}분` : '',
-      tags ? `테마:${tags}` : '',
-      menus ? `메뉴:${menus}` : '',
-    ]
-      .filter(Boolean)
-      .join(' | ')
+    return {
+      id: s.id,
+      name: s.name,
+      categoryName: s.category?.name ?? null,
+      walkingMinutes: s.walkingMinutes,
+      themeTags: s.themeTags.slice(0, 3),
+      menus: s.menus.map((m) => m.name),
+    }
   })
 
-  const data = lines.join('\n')
-  storeCache = { data, nameToId, ts: Date.now() }
-  return { context: data, nameToId }
+  storeCache = { stores, nameToId, ts: Date.now() }
+  return { stores, nameToId }
+}
+
+/** Fisher-Yates 셔플 */
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+function formatStores(stores: StoreData[]): string {
+  return stores
+    .map((s) =>
+      [
+        s.name,
+        s.categoryName ? `카테고리:${s.categoryName}` : '',
+        s.walkingMinutes ? `도보:${s.walkingMinutes}분` : '',
+        s.themeTags.length ? `테마:${s.themeTags.join(', ')}` : '',
+        s.menus.length ? `메뉴:${s.menus.join(', ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' | ')
+    )
+    .join('\n')
 }
 
 export async function POST(request: NextRequest) {
@@ -58,24 +87,48 @@ export async function POST(request: NextRequest) {
   }
 
   const { messages } = await request.json() as { messages: { role: string; content: string }[] }
-  const { context: storeContext, nameToId } = await buildStoreContext()
+  const { stores, nameToId } = await getStores()
+
+  // 매 요청마다 매장 순서를 무작위로 섞어 AI 편향 방지
+  const shuffledStores = shuffle(stores)
+  const storeContext = formatStores(shuffledStores)
 
   const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
 
   // 첫 메시지일 때만 이전 대화 기억 주입 (DB 조회)
   let memoryContext = ''
+  let recentlyRecommendedNames: string[] = []
   if (messages.length === 1) {
-    const recentLogs = await prisma.chatLog.findMany({
-      where: { userId: session.userId },
-      orderBy: { createdAt: 'desc' },
-      take: 3,
-      select: { userMessage: true },
-    })
+    const [recentLogs, recentRecoLogs] = await Promise.all([
+      prisma.chatLog.findMany({
+        where: { userId: session.userId },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        select: { userMessage: true },
+      }),
+      // 최근 추천된 매장 ID 수집 (반복 추천 방지)
+      prisma.chatLog.findMany({
+        where: { userId: session.userId, storeIds: { isEmpty: false } },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: { storeIds: true },
+      }),
+    ])
+
     if (recentLogs.length > 0) {
       const topics = recentLogs.map((l) => l.userMessage.slice(0, 60)).join(' / ')
       memoryContext = `\n[참고: 이 사용자가 최근에 찾았던 것: ${topics}]`
     }
+
+    // storeId → 매장명 역매핑
+    const idToName = Object.fromEntries(Object.entries(nameToId).map(([n, id]) => [id, n]))
+    const recentIds = [...new Set(recentRecoLogs.flatMap((l) => l.storeIds))].slice(0, 8)
+    recentlyRecommendedNames = recentIds.map((id) => idToName[id]).filter(Boolean)
   }
+
+  const avoidRule = recentlyRecommendedNames.length > 0
+    ? `\n10. 최근 이미 추천한 매장(${recentlyRecommendedNames.join(', ')})은 이번에 제외하거나 가장 마지막 선택지로 두세요. 항상 다양한 매장을 돌아가며 추천하세요.`
+    : '\n10. 매번 다양한 매장을 골고루 추천하세요. 특정 매장이 반복되지 않도록 하세요.'
 
   const systemPrompt = `당신은 띵봇입니다. 회사 근처 맛집/카페/식당을 친근하게 추천해주는 어시스턴트예요 😊${memoryContext}
 
@@ -93,7 +146,7 @@ ${storeContext}
 6. 마크다운 사용: **굵게**, ## 제목, - 목록.
 7. 카페·커피·음료·디저트를 명시적으로 요청할 때만 카페 카테고리 포함. 식사/밥/점심/저녁 추천에는 카페 제외.
 8. 위 목록에 없는 질문(날씨, 주식 등)은 "등록된 매장 정보만 알아요 😊"라고만 답하세요.
-9. 한국어로만 답하세요.`
+9. 한국어로만 답하세요.${avoidRule}`
 
   const ollamaMessages = [
     { role: 'system', content: systemPrompt },

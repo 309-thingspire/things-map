@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Users, Store, ClipboardList, TrendingUp, ChevronDown, ChevronUp, Bot } from 'lucide-react'
+import { Users, Store, ClipboardList, TrendingUp, ChevronDown, ChevronUp, Bot, Trash2 } from 'lucide-react'
 
 interface DauPoint { date: string; count: number }
 interface PopularStore {
@@ -89,12 +89,28 @@ export default function AdminDashboard() {
   const [preferences, setPreferences] = useState<UserPreference[]>([])
   const [trendPeriod, setTrendPeriod] = useState<7 | 30>(7)
   const [chatKeywords, setChatKeywords] = useState<ChatKeywords | null>(null)
+  const [resetConfirm, setResetConfirm] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   useEffect(() => {
     fetch('/api/admin/stats').then(r => r.json()).then(j => { setStats(j.data); setLoading(false) })
     fetch('/api/admin/user-preferences').then(r => r.json()).then(j => { if (j.data) setPreferences(j.data) })
     fetch('/api/admin/chat-keywords').then(r => r.json()).then(j => { if (j.data) setChatKeywords(j.data) })
   }, [])
+
+  async function handleReset() {
+    setResetting(true)
+    try {
+      const res = await fetch('/api/admin/reset-data', { method: 'DELETE' })
+      if (res.ok) {
+        setResetConfirm(false)
+        // 통계 새로고침
+        fetch('/api/admin/stats').then(r => r.json()).then(j => setStats(j.data))
+      }
+    } finally {
+      setResetting(false)
+    }
+  }
 
   function toggleUserSort(key: UserSortKey) {
     if (userSort === key) setUserSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -134,7 +150,54 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">대시보드</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">대시보드</h1>
+        <button
+          onClick={() => setResetConfirm(true)}
+          className="flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+        >
+          <Trash2 size={14} />
+          데이터 초기화
+        </button>
+      </div>
+
+      {/* 초기화 확인 모달 */}
+      {resetConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full mx-4">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">데이터 초기화</h2>
+            <p className="text-sm text-gray-600 mb-1">
+              아래 데이터를 모두 삭제합니다.
+            </p>
+            <ul className="text-sm text-gray-500 list-disc list-inside mb-4 space-y-0.5">
+              <li>챗봇 대화 기록</li>
+              <li>리뷰 및 평점</li>
+              <li>즐겨찾기</li>
+              <li>매장 등록 요청</li>
+              <li>매장 조회 기록</li>
+              <li>페이지 방문 기록</li>
+              <li>스테이징 / 크롤 작업</li>
+            </ul>
+            <p className="text-xs text-gray-400 mb-5">로그인 기록과 계정 정보는 유지됩니다.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setResetConfirm(false)}
+                disabled={resetting}
+                className="flex-1 py-2 rounded-xl border text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleReset}
+                disabled={resetting}
+                className="flex-1 py-2 rounded-xl bg-red-500 text-white text-sm font-medium hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {resetting ? '초기화 중...' : '초기화'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 요약 카드 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
