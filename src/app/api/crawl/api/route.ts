@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth'
 import { searchKakao } from '@/lib/crawl/kakao'
 import { searchNaver } from '@/lib/crawl/naver'
+import { sanitizeAddress } from '@/lib/sanitizeAddress'
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
             crawlJobId: job.id,
             rawData: r.rawData as object,
             name: r.name,
-            address: r.address,
+            address: sanitizeAddress(r.address),
             lat: r.lat ?? null,
             lng: r.lng ?? null,
             phone: r.phone ?? null,

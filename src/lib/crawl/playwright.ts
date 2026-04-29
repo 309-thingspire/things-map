@@ -1,3 +1,5 @@
+import { sanitizeAddress } from '@/lib/sanitizeAddress'
+
 interface PlaywrightResult {
   name: string
   address: string
@@ -57,7 +59,7 @@ export async function crawlByStoreName(storeName: string): Promise<PlaywrightRes
     // 매장명 유사도 검증
     if (!isNameMatch(storeName, name)) return null
 
-    const address = (await firstResult.locator('[data-id="address"]').textContent().catch(() => '') ?? '').trim()
+    const address = sanitizeAddress((await firstResult.locator('[data-id="address"]').textContent().catch(() => '') ?? '').trim())
     const phone = (await firstResult.locator('[data-id="phone"]').textContent().catch(() => null))?.trim() || null
     const category = (await firstResult.locator('[data-id="subcategory"]').textContent().catch(() => null))?.trim() || null
 

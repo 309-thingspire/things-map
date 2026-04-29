@@ -96,36 +96,30 @@ export default function AiChatModal({ open, onClose, messages, onMessages }: Pro
         const { done, value } = await reader.read()
         if (done) break
         full += decoder.decode(value, { stream: true })
-        // 스트리밍 중 STORE_MAP 메타데이터 라인은 사용자에게 보이지 않도록 제거
-        const mapIdx = full.indexOf('\n[STORE_MAP:')
-        const displayContent = mapIdx >= 0 ? full.slice(0, mapIdx) : full
-        onMessages([...history, { role: 'assistant', content: displayContent }])
+        // 스트리밍 중 메타데이터 라인([STORE_IDS:...])은 표시에서 제거
+        const metaIdx = full.indexOf('\n[STORE_IDS:')
+        const displayContent = metaIdx >= 0 ? full.slice(0, metaIdx) : full
+        // [STORE:매장명] 태그도 화면에 노출되지 않도록 제거
+        onMessages([...history, { role: 'assistant', content: displayContent.replace(STORE_TAG_RE, '').replace(/[ \t]+\n/g, '\n') }])
       }
 
-      // STORE_MAP 파싱: 서버가 보낸 숫자→실제storeId 매핑
-      const mapSplit = full.split('\n[STORE_MAP:')
-      const indexMap: Record<string, string> = {}
-      let resolvedFull = full
-      if (mapSplit.length > 1) {
-        try {
-          const mapJson = mapSplit[mapSplit.length - 1].replace(/\]$/, '')
-          Object.assign(indexMap, JSON.parse(mapJson))
-        } catch { /* ignore parse error */ }
-        resolvedFull = mapSplit[0]
+      // [STORE_IDS:["id1","id2",...]] 파싱 — 서버에서 이미 이름→ID 매핑 완료
+      const idsMatch = full.match(/\n\[STORE_IDS:(\[.*?\])\]/)
+      let storeIds: string[] = []
+      if (idsMatch) {
+        try { storeIds = JSON.parse(idsMatch[1]) } catch { /* ignore */ }
       }
 
-      // [STORE:숫자] → [STORE:실제ID] 치환
-      const resolved = resolvedFull.replace(STORE_TAG_RE, (_, idx) =>
-        `[STORE:${indexMap[idx] ?? idx}]`
-      )
-
-      const ids = [...new Set([...resolved.matchAll(STORE_TAG_RE)].map((m) => m[1]))]
-      const cleanContent = resolved.replace(STORE_TAG_RE, '').replace(/[ \t]+\n/g, '\n').trim()
+      const cleanContent = full
+        .replace(/\n\[STORE_IDS:\[.*?\]\]/g, '')
+        .replace(STORE_TAG_RE, '')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim()
 
       let stores: StoreListItem[] = []
-      if (ids.length > 0) {
+      if (storeIds.length > 0) {
         const results = await Promise.all(
-          ids.map((id) =>
+          storeIds.map((id) =>
             fetch(`/api/stores/${id}`)
               .then((r) => (r.ok ? r.json().then((d: { data: StoreListItem }) => d.data) : null))
               .catch(() => null)

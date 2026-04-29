@@ -30,11 +30,30 @@ function NavContent() {
   const [chatOpen, setChatOpen] = useState(false)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [showBotTooltip, setShowBotTooltip] = useState(false)
+  const [chatLoaded, setChatLoaded] = useState(false)
   const profileRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!localStorage.getItem('ddingbot_used')) setShowBotTooltip(true)
+    // 페이지 새로고침 후에도 대화 이어가기
+    try {
+      const saved = localStorage.getItem('ddingbot_history')
+      if (saved) {
+        const parsed: ChatMessage[] = JSON.parse(saved)
+        if (parsed.length > 0) setChatMessages(parsed)
+      }
+    } catch { /* ignore */ }
+    setChatLoaded(true)
   }, [])
+
+  // 대화 변경 시 localStorage에 저장 (텍스트만, 최근 20개)
+  useEffect(() => {
+    if (!chatLoaded) return
+    try {
+      const saveable = chatMessages.slice(-20).map((m) => ({ role: m.role, content: m.content }))
+      localStorage.setItem('ddingbot_history', JSON.stringify(saveable))
+    } catch { /* ignore */ }
+  }, [chatMessages, chatLoaded])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

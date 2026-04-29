@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth'
 import { searchNaver } from '@/lib/crawl/naver'
 import { calcOfficeDistance } from '@/lib/office'
 import { findDuplicateStore } from '@/lib/checkDuplicate'
+import { sanitizeAddress } from '@/lib/sanitizeAddress'
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -72,7 +73,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const store = await prisma.store.create({
         data: {
           name: naverData?.name ?? storeName,
-          address: naverData?.address ?? (payload.address as string) ?? '',
+          address: sanitizeAddress(naverData?.address ?? (payload.address as string) ?? ''),
           lat,
           lng,
           phone: (payload.phone as string | undefined) ?? naverData?.phone ?? null,

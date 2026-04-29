@@ -1,3 +1,5 @@
+import { sanitizeAddress } from '@/lib/sanitizeAddress'
+
 interface NaverItem {
   title: string
   address: string
@@ -50,7 +52,7 @@ export async function searchNaver(keyword: string, start = 1, display = 5): Prom
   return items.map((item) => {
     const { lat, lng } = katechToWgs84(parseInt(item.mapx), parseInt(item.mapy))
     const name = item.title.replace(/<[^>]+>/g, '')
-    const address = item.roadAddress || item.address
+    const address = sanitizeAddress(item.roadAddress || item.address)
     const naverUrl = `https://map.naver.com/p/search/${encodeURIComponent(`${name} ${address}`)}`
     return {
       name,

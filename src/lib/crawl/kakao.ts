@@ -1,3 +1,5 @@
+import { sanitizeAddress } from '@/lib/sanitizeAddress'
+
 interface KakaoPlace {
   id: string
   place_name: string
@@ -43,7 +45,7 @@ export async function searchKakao(keyword: string, page = 1, size = 15): Promise
 
   return documents.map((d) => ({
     name: d.place_name,
-    address: d.road_address_name || d.address_name,
+    address: sanitizeAddress(d.road_address_name || d.address_name),
     lat: parseFloat(d.y),
     lng: parseFloat(d.x),
     phone: d.phone || null,
