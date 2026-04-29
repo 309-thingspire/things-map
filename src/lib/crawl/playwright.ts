@@ -21,15 +21,26 @@ function isNameMatch(keyword: string, resultName: string): boolean {
     s.replace(/\s+/g, '').replace(/[^가-힣a-zA-Z0-9]/g, '').toLowerCase()
   const kw = normalize(keyword)
   const rn = normalize(resultName)
-  if (rn.includes(kw) || kw.includes(rn)) return true
+
+  // 완전 포함: 결과명이 키워드를 포함하거나 (예: "양귀비짬뽕본점" ⊇ "양귀비짬뽕")
+  if (rn.includes(kw)) return true
+
+  // 역포함: 키워드가 결과명을 포함할 때는 결과명이 키워드의 70% 이상이어야 함
+  // → "양귀비짬뽕".includes("양귀비") 같은 짧은 결과명 오매칭 방지
+  if (kw.includes(rn) && rn.length >= kw.length * 0.7) return true
+
+  // 첫 어절 매칭: 결과명이 키워드 핵심어를 포함하되, 핵심어가 충분히 길어야 함 (≥4자)
   const kwCore = normalize(keyword.split(' ')[0])
-  if (kwCore.length >= 2 && rn.includes(kwCore)) return true
+  if (kwCore.length >= 4 && rn.includes(kwCore)) return true
+
+  // 앞글자 일치율 (수정: 결과명도 일정 비율 이상 커버해야 함)
   let common = 0
   for (let i = 0; i < Math.min(kw.length, rn.length); i++) {
     if (kw[i] === rn[i]) common++
     else break
   }
-  if (kw.length > 0 && common / kw.length >= 0.7) return true
+  if (kw.length > 0 && common / kw.length >= 0.8 && common / rn.length >= 0.6) return true
+
   return false
 }
 
