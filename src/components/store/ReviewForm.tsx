@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 
 interface ReviewFormProps {
   storeId: string
-  onSuccess?: () => void
+  onSuccess?: (review: unknown) => void
 }
 
 export default function ReviewForm({ storeId, onSuccess }: ReviewFormProps) {
@@ -43,7 +43,7 @@ export default function ReviewForm({ storeId, onSuccess }: ReviewFormProps) {
         setError(json.error ?? '오류가 발생했습니다.')
         return
       }
-      onSuccess?.()
+      onSuccess?.(json.data)
     } catch {
       setError('서버 연결에 실패했습니다.')
     } finally {
@@ -81,7 +81,8 @@ export default function ReviewForm({ storeId, onSuccess }: ReviewFormProps) {
           onChange={(e) => setContent(e.target.value)}
           placeholder="경험을 공유해주세요..."
           rows={3}
-          className="border rounded-md px-3 py-2 text-sm w-full resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+          style={{ fontSize: '16px' }}
+          className="border rounded-md px-3 py-2 w-full resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 

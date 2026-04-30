@@ -388,7 +388,16 @@ export default function StoreSlideOver({ storeId, userLocation, onClose, onStore
                         </DialogHeader>
                         <ReviewForm
                           storeId={store.id}
-                          onSuccess={() => setReviewDialogOpen(false)}
+                          onSuccess={async () => {
+                            setReviewDialogOpen(false)
+                            // 리뷰 목록 + 평점 즉시 갱신
+                            const [reviewsJson, storeJson] = await Promise.all([
+                              fetch(`/api/stores/${store.id}/reviews`).then(r => r.ok ? r.json() : null),
+                              fetch(`/api/stores/${store.id}`).then(r => r.ok ? r.json() : null),
+                            ])
+                            if (reviewsJson) setReviews(reviewsJson.data.reviews ?? [])
+                            if (storeJson?.data) setStore(storeJson.data)
+                          }}
                         />
                       </DialogContent>
                     </Dialog>
